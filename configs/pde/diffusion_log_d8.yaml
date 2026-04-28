@@ -1,0 +1,42 @@
+experiment:
+  name: diffusion_log_d8
+  problem: diffusion
+  coefficient: log
+  dimension: 8
+  target: u
+
+domain:
+  type: unit_square
+  x_min: 0.0
+  x_max: 1.0
+  y_min: 0.0
+  y_max: 1.0
+
+grid:
+  nx: 16
+  ny: 16
+  include_boundary: true
+
+pde:
+  equation: elliptic_diffusion
+  forcing: 10.0
+  boundary_conditions:
+    type: dirichlet
+    bottom: 0.5
+    top: 0.0
+    left: 0.0
+    right: 0.0
+
+coefficient:
+  name: log
+  base_value: 2.62
+  formula: "exp(sum_j x_j sin(pi z_1 j) / j^(3/2))"
+
+data:
+  train_sizes: [10, 20, 50, 100, 200, 500]
+  test_size: 500
+  seeds: [0, 1, 2]
+  dtype: float32
+
+paths:
+  output_dir: data/processed/diffusion_log_d8

@@ -1,0 +1,12 @@
+model:
+  name: mlp_10x100_tanh
+  type: mlp
+  depth: 10
+  width: 100
+  activation: tanh
+  input_dim: null
+  output_dim: null
+
+initialization:
+  name: xavier_uniform
+  seed: null

@@ -1,0 +1,34 @@
+training:
+  framework: jax
+  mode: default
+
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+
+  scheduler:
+    name: none
+
+  batch_size: full
+  epochs: 10000
+
+  early_stopping:
+    enabled: false
+    patience: 1000
+    min_delta: 1.0e-8
+
+  loss:
+    name: mse
+
+  device: auto
+  dtype: float32
+
+logging:
+  log_every: 500
+  save_checkpoint: false
+  save_metrics: true
+
+reproducibility:
+  deterministic: true
+  seed: 0

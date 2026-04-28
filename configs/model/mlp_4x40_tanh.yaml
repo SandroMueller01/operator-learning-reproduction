@@ -1,0 +1,12 @@
+model:
+  name: mlp_4x40_tanh
+  type: mlp
+  depth: 4
+  width: 40
+  activation: tanh
+  input_dim: null
+  output_dim: null
+
+initialization:
+  name: xavier_uniform
+  seed: null

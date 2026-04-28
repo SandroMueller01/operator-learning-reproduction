@@ -1,0 +1,36 @@
+training:
+  framework: pytorch
+  mode: paper_like
+
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+
+  scheduler:
+    name: exponential_decay
+    decay_rate: 0.95
+    decay_steps: 1000
+
+  batch_size: full
+  epochs: 60000
+
+  early_stopping:
+    enabled: true
+    patience: 5000
+    min_delta: 1.0e-10
+
+  loss:
+    name: mse
+
+  device: auto
+  dtype: float32
+
+logging:
+  log_every: 1000
+  save_checkpoint: true
+  save_metrics: true
+
+reproducibility:
+  deterministic: true
+  seed: 0

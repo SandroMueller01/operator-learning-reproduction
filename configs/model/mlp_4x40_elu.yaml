@@ -1,0 +1,12 @@
+model:
+  name: mlp_4x40_elu
+  type: mlp
+  depth: 4
+  width: 40
+  activation: elu
+  input_dim: null
+  output_dim: null
+
+initialization:
+  name: kaiming_uniform
+  seed: null

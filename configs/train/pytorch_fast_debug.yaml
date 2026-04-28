@@ -1,0 +1,33 @@
+training:
+  framework: pytorch
+  mode: fast_debug
+
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+
+  scheduler:
+    name: none
+
+  batch_size: full
+  epochs: 2000
+
+  early_stopping:
+    enabled: true
+    patience: 300
+    min_delta: 1.0e-8
+
+  loss:
+    name: mse
+
+  device: auto
+  dtype: float32
+
+logging:
+  log_every: 100
+  save_checkpoint: false
+  save_metrics: true
+
+reproducibility:
+  deterministic: true
