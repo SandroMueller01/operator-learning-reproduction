@@ -1,0 +1,62 @@
+{
+  "experiment": {
+    "name": "boussinesq_affine_d4",
+    "problem": "boussinesq",
+    "coefficient": "affine",
+    "dimension": 4,
+    "targets": [
+      "u",
+      "phi",
+      "p"
+    ]
+  },
+  "grid": {
+    "shape": [
+      8,
+      8
+    ]
+  },
+  "pde": {
+    "equation": "stationary_boussinesq",
+    "boundary_conditions": {
+      "type": "paper_like"
+    },
+    "viscosity": {
+      "parametrized": true
+    },
+    "thermal_conductivity": {
+      "parametrized": true
+    },
+    "pressure_normalization": "zero_mean"
+  },
+  "coefficient": {
+    "name": "affine",
+    "base_value": 2.62,
+    "formula": "2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)"
+  },
+  "data": {
+    "train_sizes": [
+      10,
+      20,
+      50,
+      100,
+      200,
+      500
+    ],
+    "test_size": 500,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "output_dimensions": {
+      "y_u": 128,
+      "y_phi": 64,
+      "y_p": 64
+    }
+  },
+  "note": "Simplified finite-difference Boussinesq-style dataset. This is not the exact mixed FEM Boussinesq solver from the target paper. If the config specifies a 3D unit cube, this implementation uses a 2D slice with nx by ny grid points."
+}

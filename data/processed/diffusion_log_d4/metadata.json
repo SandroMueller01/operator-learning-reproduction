@@ -1,0 +1,53 @@
+{
+  "experiment": {
+    "name": "diffusion_log_d4",
+    "problem": "diffusion",
+    "coefficient": "log",
+    "dimension": 4,
+    "target": "u"
+  },
+  "grid": {
+    "nx": 16,
+    "ny": 16,
+    "hx": 0.06666666666666667,
+    "hy": 0.06666666666666667
+  },
+  "pde": {
+    "equation": "elliptic_diffusion",
+    "forcing": 10.0,
+    "boundary_conditions": {
+      "type": "dirichlet",
+      "bottom": 0.5,
+      "top": 0.0,
+      "left": 0.0,
+      "right": 0.0
+    }
+  },
+  "coefficient": {
+    "name": "log",
+    "base_value": 2.62,
+    "formula": "exp(sum_j x_j sin(pi z_1 j) / j^(3/2))"
+  },
+  "data": {
+    "train_sizes": [
+      10,
+      20,
+      50,
+      100,
+      200,
+      500
+    ],
+    "test_size": 500,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "target": "u",
+    "output_dimension": 256,
+    "layout": "flattened_solution_ny_by_nx"
+  }
+}
