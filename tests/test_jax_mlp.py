@@ -21,6 +21,7 @@ def test_jax_mlp_output_shape() -> None:
         depth=4,
         width=40,
         activation="elu",
+        initialization="kaiming_uniform",
     )
     key = jax.random.PRNGKey(0)
     params = initialize_jax_mlp(config=config, key=key)
@@ -43,8 +44,26 @@ def test_jax_mlp_parameter_count_positive() -> None:
         depth=4,
         width=40,
         activation="elu",
+        initialization="kaiming_uniform",
     )
     key = jax.random.PRNGKey(0)
+    params = initialize_jax_mlp(config=config, key=key)
+
+    assert count_jax_parameters(params) > 0
+
+
+def test_jax_mlp_accepts_xavier_uniform() -> None:
+    """JAX MLP should accept Xavier initialization."""
+    config = JaxMlpConfig(
+        input_dim=4,
+        output_dim=256,
+        depth=4,
+        width=40,
+        activation="tanh",
+        initialization="xavier_uniform",
+    )
+    key = jax.random.PRNGKey(0)
+
     params = initialize_jax_mlp(config=config, key=key)
 
     assert count_jax_parameters(params) > 0
@@ -58,6 +77,7 @@ def test_jax_mlp_rejects_invalid_activation() -> None:
         depth=4,
         width=40,
         activation="invalid",
+        initialization="kaiming_uniform",
     )
     key = jax.random.PRNGKey(0)
 
@@ -65,5 +85,25 @@ def test_jax_mlp_rejects_invalid_activation() -> None:
         initialize_jax_mlp(config=config, key=key)
     except ValueError as error:
         assert "activation must be one of" in str(error)
+    else:
+        raise AssertionError("Expected ValueError was not raised.")
+
+
+def test_jax_mlp_rejects_invalid_initialization() -> None:
+    """JAX MLP should reject unsupported initialization names."""
+    config = JaxMlpConfig(
+        input_dim=4,
+        output_dim=256,
+        depth=4,
+        width=40,
+        activation="elu",
+        initialization="invalid",
+    )
+    key = jax.random.PRNGKey(0)
+
+    try:
+        initialize_jax_mlp(config=config, key=key)
+    except ValueError as error:
+        assert "initialization must be one of" in str(error)
     else:
         raise AssertionError("Expected ValueError was not raised.")

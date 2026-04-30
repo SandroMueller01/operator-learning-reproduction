@@ -86,7 +86,28 @@ def train_jax(
     model_config: ConfigDict,
     train_config: ConfigDict,
 ) -> dict[str, float]:
-    """Train a JAX MLP and evaluate relative test error."""
+    """Train a JAX MLP and evaluate relative test error.
+
+    Parameters
+    ----------
+    x_train:
+        Training inputs.
+    y_train:
+        Training targets.
+    x_test:
+        Test inputs.
+    y_test:
+        Test targets.
+    model_config:
+        Model configuration.
+    train_config:
+        Training configuration.
+
+    Returns
+    -------
+    dict[str, float]
+        Training summary metrics.
+    """
     _validate_arrays(
         x_train=x_train,
         y_train=y_train,
@@ -98,26 +119,23 @@ def train_jax(
     y_train_jax = jnp.asarray(y_train, dtype=jnp.float32)
     x_test_jax = jnp.asarray(x_test, dtype=jnp.float32)
 
-    input_dim = int(x_train.shape[1])
-    output_dim = int(y_train.shape[1])
-
     model_info = model_config["model"]
+    initialization_info = model_config.get("initialization", {})
+
     mlp_config = JaxMlpConfig(
-        input_dim=input_dim,
-        output_dim=output_dim,
+        input_dim=int(x_train.shape[1]),
+        output_dim=int(y_train.shape[1]),
         depth=int(model_info["depth"]),
         width=int(model_info["width"]),
         activation=str(model_info["activation"]),
+        initialization=str(initialization_info.get("name", "default")),
     )
 
     seed = int(train_config.get("reproducibility", {}).get("seed", 0))
     key = jax.random.PRNGKey(seed)
     params = initialize_jax_mlp(config=mlp_config, key=key)
 
-    optimizer_info = train_config["training"]["optimizer"]
-    optimizer = optax.adam(
-        learning_rate=float(optimizer_info["learning_rate"])
-    )
+    optimizer = _build_optimizer(train_config=train_config)
     opt_state = optimizer.init(params)
 
     epochs = int(train_config["training"]["epochs"])
@@ -162,8 +180,58 @@ def train_jax(
     }
 
 
+def _build_optimizer(
+    train_config: ConfigDict,
+) -> optax.GradientTransformation:
+    """Build Optax optimizer.
+
+    Parameters
+    ----------
+    train_config:
+        Training configuration.
+
+    Returns
+    -------
+    optax.GradientTransformation
+        Configured optimizer.
+
+    Raises
+    ------
+    ValueError
+        If the optimizer is unsupported.
+    """
+    optimizer_info = train_config["training"]["optimizer"]
+    optimizer_name = str(optimizer_info["name"]).lower()
+
+    learning_rate = float(optimizer_info["learning_rate"])
+
+    if optimizer_name == "adam":
+        weight_decay = float(optimizer_info.get("weight_decay", 0.0))
+
+        if weight_decay > 0.0:
+            return optax.adamw(
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+            )
+
+        return optax.adam(learning_rate=learning_rate)
+
+    raise ValueError(f"Unsupported optimizer: {optimizer_name}")
+
+
 def _target_to_dataset_key(target: str) -> str:
-    """Convert a target name to a dataset key."""
+    """Convert a target name to a dataset key.
+
+    Parameters
+    ----------
+    target:
+        Target name.
+
+    Returns
+    -------
+    str
+        Dataset key.
+    """
     normalized_target = target.strip().lower()
 
     if not normalized_target:
@@ -177,7 +245,17 @@ def _validate_target_key(
     target_key: str,
     split_name: str,
 ) -> None:
-    """Validate that a dataset contains the requested target key."""
+    """Validate that a dataset contains the requested target key.
+
+    Parameters
+    ----------
+    data:
+        Dataset dictionary.
+    target_key:
+        Required target key.
+    split_name:
+        Dataset split name.
+    """
     if "x" not in data:
         raise ValueError(
             f"Dataset split {split_name!r} is missing required key 'x'. "
@@ -197,7 +275,19 @@ def _validate_arrays(
     x_test: np.ndarray,
     y_test: np.ndarray,
 ) -> None:
-    """Validate train/test arrays."""
+    """Validate train/test arrays.
+
+    Parameters
+    ----------
+    x_train:
+        Training inputs.
+    y_train:
+        Training targets.
+    x_test:
+        Test inputs.
+    y_test:
+        Test targets.
+    """
     if x_train.ndim != 2:
         raise ValueError("x_train must be two-dimensional.")
 
@@ -227,7 +317,20 @@ def _build_train_step(
     optimizer: optax.GradientTransformation,
     activation: str,
 ):
-    """Build a JIT-compiled JAX training step."""
+    """Build a JIT-compiled JAX training step.
+
+    Parameters
+    ----------
+    optimizer:
+        Optax optimizer.
+    activation:
+        Activation function name.
+
+    Returns
+    -------
+    Callable
+        JIT-compiled training step.
+    """
 
     @jax.jit
     def train_step(
@@ -264,7 +367,30 @@ def _run_training_loop(
     epochs: int,
     log_every: int,
 ) -> tuple[Params, OptState, jax.Array]:
-    """Run full-batch JAX training."""
+    """Run full-batch JAX training.
+
+    Parameters
+    ----------
+    params:
+        Model parameters.
+    opt_state:
+        Optimizer state.
+    train_step:
+        JIT-compiled training step.
+    x_train:
+        Training inputs.
+    y_train:
+        Training targets.
+    epochs:
+        Number of epochs.
+    log_every:
+        Logging frequency.
+
+    Returns
+    -------
+    tuple[Params, OptState, jax.Array]
+        Updated parameters, optimizer state, and final loss.
+    """
     final_loss = jnp.asarray(jnp.nan)
 
     for epoch in range(1, epochs + 1):
@@ -288,7 +414,24 @@ def _mse_loss(
     targets: jax.Array,
     activation: str,
 ) -> jax.Array:
-    """Compute mean squared error loss."""
+    """Compute mean squared error loss.
+
+    Parameters
+    ----------
+    params:
+        Model parameters.
+    inputs:
+        Input batch.
+    targets:
+        Target batch.
+    activation:
+        Activation function name.
+
+    Returns
+    -------
+    jax.Array
+        Scalar MSE loss.
+    """
     predictions = apply_jax_mlp(
         params=params,
         inputs=inputs,

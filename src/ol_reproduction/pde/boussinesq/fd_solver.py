@@ -38,7 +38,7 @@ class BoussinesqSolverParameters:
     """Parameters for the simplified Boussinesq solver."""
 
     temperature_forcing: float = 1.0
-    buoyancy_scale: float = 1.0
+    buoyancy_scale: float = 30.0
     brinkman_alpha: float = 1.0
     pressure_stabilization: float = 1.0e-6
 
@@ -48,9 +48,9 @@ class TemperatureBoundaryConditions:
     """Dirichlet boundary values for the temperature equation."""
 
     bottom: float = 1.0
-    top: float = 0.0
-    left: float = 0.0
-    right: float = 0.0
+    top: float = 100.0
+    left: float = 1.0
+    right: float = 1.0e-6
 
 
 def solve_boussinesq_fd(

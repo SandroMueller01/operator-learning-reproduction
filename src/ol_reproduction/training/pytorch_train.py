@@ -45,8 +45,7 @@ def train_pytorch_from_files(
     train_config_path:
         Path to training YAML config.
     target:
-        Target variable name. Supported values depend on the dataset, for
-        example ``u``, ``p`` or ``phi``.
+        Target variable name. Examples are ``u``, ``p`` and ``phi``.
 
     Returns
     -------
@@ -59,8 +58,16 @@ def train_pytorch_from_files(
     test_data = load_npz_dataset(dataset_path / test_file)
 
     target_key = _target_to_dataset_key(target)
-    _validate_target_key(train_data, target_key, split_name="train")
-    _validate_target_key(test_data, target_key, split_name="test")
+    _validate_target_key(
+        data=train_data,
+        target_key=target_key,
+        split_name="train",
+    )
+    _validate_target_key(
+        data=test_data,
+        target_key=target_key,
+        split_name="test",
+    )
 
     model_config = load_yaml(model_config_path)
     train_config = load_yaml(train_config_path)
@@ -104,7 +111,7 @@ def train_pytorch(
     -------
     dict[str, float]
         Summary metrics containing final training loss, relative test error,
-        and training time.
+        training time and executed epochs.
     """
     _validate_arrays(
         x_train=x_train,
@@ -142,21 +149,28 @@ def train_pytorch(
         model=model,
         train_config=train_config,
     )
+    scheduler = _build_scheduler(
+        optimizer=optimizer,
+        train_config=train_config,
+    )
 
     loss_function = nn.MSELoss()
     epochs = int(train_config["training"]["epochs"])
     log_every = int(train_config.get("logging", {}).get("log_every", 100))
+    early_stopping_config = _get_early_stopping_config(train_config)
 
     start_time = time.perf_counter()
 
-    final_loss = _run_training_loop(
+    training_result = _run_training_loop(
         model=model,
         optimizer=optimizer,
+        scheduler=scheduler,
         loss_function=loss_function,
         x_train=x_train_tensor,
         y_train=y_train_tensor,
         epochs=epochs,
         log_every=log_every,
+        early_stopping_config=early_stopping_config,
     )
 
     training_time = time.perf_counter() - start_time
@@ -172,9 +186,12 @@ def train_pytorch(
     )
 
     return {
-        "final_train_loss": float(final_loss),
+        "final_train_loss": float(training_result["final_loss"]),
+        "best_train_loss": float(training_result["best_loss"]),
         "relative_test_error": float(test_error),
         "training_time_sec": float(training_time),
+        "epochs_ran": float(training_result["epochs_ran"]),
+        "early_stopped": float(training_result["early_stopped"]),
     }
 
 
@@ -234,7 +251,19 @@ def _validate_arrays(
     x_test: np.ndarray,
     y_test: np.ndarray,
 ) -> None:
-    """Validate train/test arrays."""
+    """Validate train/test arrays.
+
+    Parameters
+    ----------
+    x_train:
+        Training inputs.
+    y_train:
+        Training targets.
+    x_test:
+        Test inputs.
+    y_test:
+        Test targets.
+    """
     if x_train.ndim != 2:
         raise ValueError("x_train must be two-dimensional.")
 
@@ -266,7 +295,24 @@ def _build_model(
     model_config: ConfigDict,
     device: torch.device,
 ) -> PyTorchMLP:
-    """Build and initialize a PyTorch MLP."""
+    """Build and initialize a PyTorch MLP.
+
+    Parameters
+    ----------
+    x_train:
+        Training input array.
+    y_train:
+        Training target array.
+    model_config:
+        Model configuration.
+    device:
+        PyTorch device.
+
+    Returns
+    -------
+    PyTorchMLP
+        Initialized model.
+    """
     model_info = model_config["model"]
 
     model = PyTorchMLP(
@@ -294,7 +340,25 @@ def _build_optimizer(
     model: nn.Module,
     train_config: ConfigDict,
 ) -> torch.optim.Optimizer:
-    """Build the PyTorch optimizer."""
+    """Build the PyTorch optimizer.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    train_config:
+        Training configuration.
+
+    Returns
+    -------
+    torch.optim.Optimizer
+        Configured optimizer.
+
+    Raises
+    ------
+    ValueError
+        If the optimizer is unsupported.
+    """
     optimizer_info = train_config["training"]["optimizer"]
     optimizer_name = str(optimizer_info["name"]).lower()
 
@@ -311,17 +375,118 @@ def _build_optimizer(
     raise ValueError(f"Unsupported optimizer: {optimizer_name}")
 
 
+def _build_scheduler(
+    optimizer: torch.optim.Optimizer,
+    train_config: ConfigDict,
+):
+    """Build an optional PyTorch learning-rate scheduler.
+
+    Parameters
+    ----------
+    optimizer:
+        PyTorch optimizer.
+    train_config:
+        Training configuration.
+
+    Returns
+    -------
+    object | None
+        Scheduler object or ``None``.
+
+    Raises
+    ------
+    ValueError
+        If the scheduler is unsupported.
+    """
+    scheduler_info = train_config["training"].get("scheduler", {})
+    scheduler_name = str(scheduler_info.get("name", "none")).lower()
+
+    if scheduler_name == "none":
+        return None
+
+    if scheduler_name == "exponential_decay":
+        decay_rate = float(scheduler_info["decay_rate"])
+        return torch.optim.lr_scheduler.ExponentialLR(
+            optimizer=optimizer,
+            gamma=decay_rate,
+        )
+
+    raise ValueError(f"Unsupported scheduler: {scheduler_name}")
+
+
+def _get_early_stopping_config(train_config: ConfigDict) -> ConfigDict:
+    """Extract early stopping configuration.
+
+    Parameters
+    ----------
+    train_config:
+        Training configuration.
+
+    Returns
+    -------
+    dict[str, Any]
+        Early stopping configuration.
+    """
+    return train_config["training"].get(
+        "early_stopping",
+        {
+            "enabled": False,
+            "patience": 0,
+            "min_delta": 0.0,
+        },
+    )
+
+
 def _run_training_loop(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
+    scheduler,
     loss_function: nn.Module,
     x_train: torch.Tensor,
     y_train: torch.Tensor,
     epochs: int,
     log_every: int,
-) -> float:
-    """Run full-batch PyTorch training."""
+    early_stopping_config: ConfigDict,
+) -> dict[str, float | int | bool]:
+    """Run full-batch PyTorch training.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    optimizer:
+        Optimizer.
+    scheduler:
+        Optional learning-rate scheduler.
+    loss_function:
+        Loss function.
+    x_train:
+        Training inputs.
+    y_train:
+        Training targets.
+    epochs:
+        Maximum number of epochs.
+    log_every:
+        Logging frequency.
+    early_stopping_config:
+        Early stopping configuration.
+
+    Returns
+    -------
+    dict[str, float | int | bool]
+        Training result.
+    """
     final_loss = float("nan")
+    best_loss = float("inf")
+    epochs_without_improvement = 0
+    epochs_ran = 0
+    early_stopped = False
+
+    early_stopping_enabled = bool(
+        early_stopping_config.get("enabled", False)
+    )
+    patience = int(early_stopping_config.get("patience", 0))
+    min_delta = float(early_stopping_config.get("min_delta", 0.0))
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -333,16 +498,50 @@ def _run_training_loop(
         loss.backward()
         optimizer.step()
 
+        if scheduler is not None:
+            scheduler.step()
+
         final_loss = float(loss.detach().cpu().item())
+        epochs_ran = epoch
+
+        if final_loss < best_loss:
+            best_loss = final_loss
 
         if _should_log_epoch(
             epoch=epoch,
             epochs=epochs,
             log_every=log_every,
         ):
-            print(f"epoch={epoch:05d} train_loss={final_loss:.6e}")
+            learning_rate = optimizer.param_groups[0]["lr"]
+            print(
+                f"epoch={epoch:05d} "
+                f"train_loss={final_loss:.6e} "
+                f"lr={learning_rate:.6e}"
+            )
 
-    return final_loss
+        if early_stopping_enabled:
+            improved = final_loss < best_loss - min_delta
+
+            if improved:
+                best_loss = final_loss
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+
+            if patience > 0 and epochs_without_improvement >= patience:
+                early_stopped = True
+                print(
+                    f"Early stopping at epoch={epoch:05d} "
+                    f"best_loss={best_loss:.6e}"
+                )
+                break
+
+    return {
+        "final_loss": final_loss,
+        "best_loss": best_loss,
+        "epochs_ran": epochs_ran,
+        "early_stopped": early_stopped,
+    }
 
 
 def _should_log_epoch(
@@ -350,7 +549,22 @@ def _should_log_epoch(
     epochs: int,
     log_every: int,
 ) -> bool:
-    """Check whether a training epoch should be logged."""
+    """Check whether a training epoch should be logged.
+
+    Parameters
+    ----------
+    epoch:
+        Current epoch.
+    epochs:
+        Total number of epochs.
+    log_every:
+        Logging frequency.
+
+    Returns
+    -------
+    bool
+        Whether to log the current epoch.
+    """
     return epoch == 1 or epoch % log_every == 0 or epoch == epochs
 
 
@@ -358,7 +572,20 @@ def _predict_numpy(
     model: nn.Module,
     inputs: torch.Tensor,
 ) -> np.ndarray:
-    """Evaluate model and return NumPy predictions."""
+    """Evaluate model and return NumPy predictions.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    inputs:
+        Input tensor.
+
+    Returns
+    -------
+    np.ndarray
+        Predictions as a NumPy array.
+    """
     model.eval()
 
     with torch.no_grad():
@@ -368,7 +595,18 @@ def _predict_numpy(
 
 
 def _get_device(device_name: str) -> torch.device:
-    """Resolve training device."""
+    """Resolve training device.
+
+    Parameters
+    ----------
+    device_name:
+        Device config value. Use ``auto`` to select CUDA if available.
+
+    Returns
+    -------
+    torch.device
+        PyTorch device.
+    """
     if device_name == "auto":
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

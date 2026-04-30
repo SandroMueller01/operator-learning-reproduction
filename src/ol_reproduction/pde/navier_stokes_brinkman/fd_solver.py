@@ -51,8 +51,8 @@ class NsbGrid:
 class NsbForcing:
     """Constant forcing for the simplified Brinkman system."""
 
-    force_x: float = 1.0
-    force_y: float = 0.0
+    force_x: float = 5.0
+    force_y: float = 0.5
 
 
 @dataclass(frozen=True)
