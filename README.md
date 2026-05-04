@@ -1,4 +1,49 @@
+# Operator Learning Reproduction Project
+
+This repository contains a practical reimplementation pipeline for the paper:
+
+> **Generalization Error of Deep Operator Networks in Banach Spaces**  
+> arXiv: 2406.13928
+
+The goal of this project is to reproduce and investigate the main numerical ideas of the paper using a configurable Python implementation. The code supports data generation for parametric PDE problems, neural network training in PyTorch and JAX, evaluation of relative errors, plotting, and result summarization.
+
+The implementation is designed as a practical reproduction framework. The diffusion experiment is implemented closest to the original setup. The Navier--Stokes--Brinkman and Boussinesq problems are implemented as simplified finite-difference analogues of the paper's mixed finite element benchmarks.
+
+---
+
+## Project Scope
+
+The original paper uses FEniCS-based mixed finite element solvers to generate PDE data. In contrast, this repository uses finite-difference solvers for the main practical pipeline.
+
+Implemented problems:
+
+| Problem | Targets | Implementation status |
+|---|---:|---|
+| Diffusion equation | `u` | Closest finite-difference reproduction |
+| Navier--Stokes--Brinkman | `u`, `p` | Simplified finite-difference Brinkman-type analogue |
+| Boussinesq | `u`, `phi`, `p` | Simplified finite-difference Boussinesq-style analogue |
+
+Implemented frameworks:
+
+| Framework | Status |
+|---|---|
+| PyTorch | Implemented |
+| JAX | Implemented |
+
+Implemented model type:
+
+| Model | Description |
+|---|---|
+| MLP | Fully connected feed-forward network |
+
+Supported activations:
+
+```text
+relu
+elu
+tanh
 Supported architectures:
+````
 
 ```text
 4 x 40
