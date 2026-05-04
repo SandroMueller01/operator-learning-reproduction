@@ -4,6 +4,7 @@ experiment:
   coefficient: log
   dimension: 4
   target: u
+  paper_reference: appendix_b_diffusion
 
 domain:
   type: unit_square
@@ -16,6 +17,7 @@ grid:
   nx: 16
   ny: 16
   include_boundary: true
+  note: "Finite-difference grid used in this implementation; paper uses FEM with 2622 DoF."
 
 pde:
   equation: elliptic_diffusion
@@ -29,11 +31,17 @@ pde:
 
 coefficient:
   name: log
-  base_value: 2.62
-  formula: "exp(sum_j x_j sin(pi z_1 j) / j^(3/2))"
+  beta_c: 0.125
+  beta_p: 1.0
+  beta: 0.125
+  base_shift: 1.0
+  formula: "paper-inspired log coefficient a_{2,d}; see Appendix B"
+  parameter_domain: [-1.0, 1.0]
+  implementation_note: "Current code uses a finite-dimensional approximation compatible with the FD solvers."
 
 data:
-  train_sizes: [10, 20, 50, 100, 200, 500]
+  train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
+  paper_train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
   test_size: 500
   seeds: [0, 1, 2]
   dtype: float32

@@ -1,9 +1,11 @@
 experiment:
-  name: nsb_log_d4
+  name: nsb_log_d8
   problem: navier_stokes_brinkman
   coefficient: log
-  dimension: 4
+  dimension: 8
   targets: [u, p]
+  paper_reference: appendix_b_navier_stokes_brinkman
+  implementation_note: "Simplified finite-difference Brinkman-type solver; paper uses nonlinear mixed FEM."
 
 domain:
   type: unit_square
@@ -16,25 +18,49 @@ grid:
   nx: 16
   ny: 16
   include_boundary: true
+  note: "FD grid used here; paper reports u: 1464 DoF and p: 244 DoF."
 
 pde:
   equation: navier_stokes_brinkman
+  pressure_normalization: zero_mean
+  physical_parameters:
+    lambda: 0.1
+    eta:
+      type: spatial_formula
+      formula: "10 + z1^2 + z2^2"
+    forcing:
+      force_x: 0.0
+      force_y: -1.0
   boundary_conditions:
     type: paper_like
-  viscosity:
-    parametrized: true
-  pressure_normalization: zero_mean
+    inlet:
+      location: "(0,1) x {1}"
+      velocity_formula: "(0.0625)^(-1) * ((z2 - 0.5) * (1 - z2), 0)"
+    outlet:
+      location: "{1} x (0,1)"
+      type: zero_normal_cauchy_stress
+    walls:
+      locations:
+        - "{0} x (0,1)"
+        - "(0,1) x {0}"
+      type: no_slip
 
 coefficient:
   name: log
-  base_value: 2.62
-  formula: "exp(sum_j x_j sin(pi z_1 j) / j^(3/2))"
+  beta_c: 0.125
+  beta_p: 1.0
+  beta: 0.125
+  base_shift: 1.0
+  formula: "paper-inspired log coefficient a_{2,d}; see Appendix B"
+  parameter_domain: [-1.0, 1.0]
+  implementation_note: "Current code uses a finite-dimensional approximation compatible with the FD solvers."
 
 data:
-  train_sizes: [10, 20, 50, 100, 200, 500]
+  train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
+  paper_train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
   test_size: 500
   seeds: [0, 1, 2]
   dtype: float32
 
 paths:
-  output_dir: data/processed/nsb_log_d4
+  output_dir: data/processed/nsb_log_d8

@@ -4,13 +4,14 @@
     "problem": "diffusion",
     "coefficient": "log",
     "dimension": 4,
-    "target": "u"
+    "target": "u",
+    "paper_reference": "appendix_b_diffusion"
   },
   "grid": {
-    "nx": 16,
-    "ny": 16,
-    "hx": 0.06666666666666667,
-    "hy": 0.06666666666666667
+    "shape": [
+      16,
+      16
+    ]
   },
   "pde": {
     "equation": "elliptic_diffusion",
@@ -25,16 +26,48 @@
   },
   "coefficient": {
     "name": "log",
-    "base_value": 2.62,
-    "formula": "exp(sum_j x_j sin(pi z_1 j) / j^(3/2))"
+    "beta_c": 0.125,
+    "beta_p": 1.0,
+    "beta": 0.125,
+    "base_shift": 1.0,
+    "formula": "paper-inspired log coefficient a_{2,d}; see Appendix B",
+    "parameter_domain": [
+      -1.0,
+      1.0
+    ],
+    "implementation_note": "Current code uses a finite-dimensional approximation compatible with the FD solvers."
   },
   "data": {
     "train_sizes": [
       10,
       20,
+      30,
+      40,
       50,
+      60,
+      70,
+      80,
+      90,
       100,
       200,
+      300,
+      400,
+      500
+    ],
+    "paper_train_sizes": [
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90,
+      100,
+      200,
+      300,
+      400,
       500
     ],
     "test_size": 500,
@@ -46,8 +79,9 @@
     "dtype": "float32"
   },
   "output": {
-    "target": "u",
-    "output_dimension": 256,
-    "layout": "flattened_solution_ny_by_nx"
-  }
+    "output_dimensions": {
+      "y_u": 256
+    }
+  },
+  "note": "Diffusion dataset generated with finite differences."
 }

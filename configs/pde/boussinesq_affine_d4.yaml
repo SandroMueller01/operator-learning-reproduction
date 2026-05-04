@@ -4,6 +4,8 @@ experiment:
   coefficient: affine
   dimension: 4
   targets: [u, phi, p]
+  paper_reference: appendix_b_boussinesq
+  implementation_note: "Simplified 2D finite-difference Boussinesq-style solver; paper uses a 3D mixed FEM formulation."
 
 domain:
   type: unit_cube
@@ -19,24 +21,56 @@ grid:
   ny: 8
   nz: 8
   include_boundary: true
+  implementation_grid_note: "Current implementation uses an nx by ny 2D slice; nz is retained as paper metadata."
+  paper_dof:
+    u: 18480
+    phi: 528
+    p: 528
 
 pde:
   equation: stationary_boussinesq
+  pressure_normalization: zero_mean
+  physical_parameters:
+    gravity:
+      gx: 0.0
+      gy: 0.0
+      gz: -1.0
+    viscosity_temperature_law:
+      formula: "0.1 + exp(-phi)"
+    thermal_conductivity:
+      base_value: 1.89
+      decay_power: 1.8
+      coordinate: z3
+      diagonal_scaling:
+        - "exp(-z1)"
+        - "exp(-z2)"
+        - "exp(-z3)"
+      formula: "(1.89 + sum_j x_j sin(pi z_3 j) / j^(9/5)) * diag(exp(-z1), exp(-z2), exp(-z3))"
   boundary_conditions:
     type: paper_like
-  viscosity:
-    parametrized: true
-  thermal_conductivity:
-    parametrized: true
-  pressure_normalization: zero_mean
+    velocity:
+      bottom:
+        value: [1.0, 1.0, 0.0]
+      elsewhere:
+        value: [0.0, 0.0, 0.0]
+    temperature:
+      bottom:
+        formula: "exp(4*(-(z1 - 0.5)^2 - (z2 - 0.5)^2))"
+      elsewhere:
+        value: 0.0
 
 coefficient:
   name: affine
   base_value: 2.62
-  formula: "2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)"
+  decay_power: 1.5
+  spatial_coordinate: z1
+  basis: sine
+  formula: "2.62 + sum_{j=1}^d x_j sin(pi z_1 j) / j^(3/2)"
+  parameter_domain: [-1.0, 1.0]
 
 data:
-  train_sizes: [10, 20, 50, 100, 200, 500]
+  train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
+  paper_train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
   test_size: 500
   seeds: [0, 1, 2]
   dtype: float32
