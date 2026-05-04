@@ -1,0 +1,135 @@
+{
+  "experiment": {
+    "name": "boussinesq_log_d8",
+    "problem": "boussinesq",
+    "coefficient": "log",
+    "dimension": 8,
+    "targets": [
+      "u",
+      "phi",
+      "p"
+    ],
+    "paper_reference": "appendix_b_boussinesq",
+    "implementation_note": "Simplified 2D finite-difference Boussinesq-style solver; paper uses a 3D mixed FEM formulation."
+  },
+  "grid": {
+    "shape": [
+      8,
+      8
+    ]
+  },
+  "pde": {
+    "equation": "stationary_boussinesq",
+    "pressure_normalization": "zero_mean",
+    "physical_parameters": {
+      "gravity": {
+        "gx": 0.0,
+        "gy": 0.0,
+        "gz": -1.0
+      },
+      "viscosity_temperature_law": {
+        "formula": "0.1 + exp(-phi)"
+      },
+      "thermal_conductivity": {
+        "base_value": 1.89,
+        "decay_power": 1.8,
+        "coordinate": "z3",
+        "diagonal_scaling": [
+          "exp(-z1)",
+          "exp(-z2)",
+          "exp(-z3)"
+        ],
+        "formula": "(1.89 + sum_j x_j sin(pi z_3 j) / j^(9/5)) * diag(exp(-z1), exp(-z2), exp(-z3))"
+      }
+    },
+    "boundary_conditions": {
+      "type": "paper_like",
+      "velocity": {
+        "bottom": {
+          "value": [
+            1.0,
+            1.0,
+            0.0
+          ]
+        },
+        "elsewhere": {
+          "value": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "temperature": {
+        "bottom": {
+          "formula": "exp(4*(-(z1 - 0.5)^2 - (z2 - 0.5)^2))"
+        },
+        "elsewhere": {
+          "value": 0.0
+        }
+      }
+    }
+  },
+  "coefficient": {
+    "name": "log",
+    "beta_c": 0.125,
+    "beta_p": 1.0,
+    "beta": 0.125,
+    "base_shift": 1.0,
+    "formula": "paper-inspired log coefficient a_{2,d}; see Appendix B",
+    "parameter_domain": [
+      -1.0,
+      1.0
+    ],
+    "implementation_note": "Current code uses a finite-dimensional approximation compatible with the FD solvers."
+  },
+  "data": {
+    "train_sizes": [
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90,
+      100,
+      200,
+      300,
+      400,
+      500
+    ],
+    "paper_train_sizes": [
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90,
+      100,
+      200,
+      300,
+      400,
+      500
+    ],
+    "test_size": 500,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "output_dimensions": {
+      "y_u": 128,
+      "y_phi": 64,
+      "y_p": 64
+    }
+  },
+  "note": "Simplified finite-difference Boussinesq-style dataset. This is not the exact mixed FEM Boussinesq solver from the target paper. If the config specifies a 3D unit cube, this implementation uses a 2D slice with nx by ny grid points."
+}

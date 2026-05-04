@@ -1,0 +1,78 @@
+{
+  "experiment": {
+    "name": "diffusion_affine_d8",
+    "problem": "diffusion",
+    "coefficient": "affine",
+    "dimension": 8,
+    "target": "u"
+  },
+  "grid": {
+    "shape": [
+      16,
+      16
+    ]
+  },
+  "pde": {
+    "equation": "elliptic_diffusion",
+    "forcing": 10.0,
+    "boundary_conditions": {
+      "type": "dirichlet",
+      "bottom": 0.5,
+      "top": 0.0,
+      "left": 0.0,
+      "right": 0.0
+    }
+  },
+  "coefficient": {
+    "name": "affine",
+    "base_value": 2.62,
+    "formula": "2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)"
+  },
+  "data": {
+    "train_sizes": [
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90,
+      100,
+      200,
+      300,
+      400,
+      500
+    ],
+    "paper_train_sizes": [
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90,
+      100,
+      200,
+      300,
+      400,
+      500
+    ],
+    "test_size": 500,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "output_dimensions": {
+      "y_u": 256
+    }
+  },
+  "note": "Diffusion dataset generated with finite differences."
+}
