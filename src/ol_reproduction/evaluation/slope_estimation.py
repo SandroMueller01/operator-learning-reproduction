@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-REQUIRED_COLUMNS = {
+required_columns = {
     "m_train",
     "relative_test_error",
 }
@@ -151,7 +151,7 @@ def _validate_metrics_frame(data_frame: pd.DataFrame) -> None:
     data_frame:
         Metrics dataframe.
     """
-    missing_columns = REQUIRED_COLUMNS.difference(data_frame.columns)
+    missing_columns = required_columns.difference(data_frame.columns)
 
     if missing_columns:
         raise ValueError(

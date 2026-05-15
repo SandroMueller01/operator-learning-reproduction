@@ -1,10 +1,28 @@
+# Configuration for generating diffusion-equation training data
+# The experiment learns the mapping from a finite-dimensional parameter vector
+# to the PDE solution field
+
 experiment:
+  # Unique experiment name. Also used for naming output folders and results
   name: diffusion_affine_d4
+
+  # PDE problem type. This selects the diffusion data-generation pipeline
   problem: diffusion
+
+  # Coefficient family used inside the PDE.
+  # "affine" means the diffusion coefficient depends linearly on the parameters
   coefficient: affine
-  dimension: 4
+
+  # Number of input parameters x_j used to define the PDE coefficient
+  # Each data sample has an input vector x in R^4
+  dimension: 4 # x1, x2, x3, x4
+
+  # Quantity to predict. For the scalar diffusion equation, the only target is u
   target: u
 
+
+# Spatial domain on which the PDE is solved.
+# Here, the domain is the unit square [0, 1] x [0, 1]
 domain:
   type: unit_square
   x_min: 0.0
@@ -12,32 +30,87 @@ domain:
   y_min: 0.0
   y_max: 1.0
 
+
+# Numerical grid used to discretize the PDE solution
 grid:
+  # Number of grid points in the x-direction
   nx: 16
+
+  # Number of grid points in the y-direction
   ny: 16
+
+  # Include boundary grid points in the generated solution
   include_boundary: true
 
+
+# PDE definition for the elliptic diffusion problem:
+#   -div(a(z, x) grad u(z)) = f
 pde:
+  # Type of PDE equation being solved
   equation: elliptic_diffusion
+
+  # Constant forcing term f on the right-hand side of the PDE
   forcing: 10.0
+
+  # Dirichlet boundary conditions prescribe fixed values of u on the boundary
   boundary_conditions:
     type: dirichlet
+
+    # Boundary value at the bottom edge of the domain
     bottom: 0.5
+
+    # Boundary values at the remaining edges of the domain
     top: 0.0
     left: 0.0
     right: 0.0
 
+
+# Parameter-dependent diffusion coefficient a(z, x)
 coefficient:
+  # Coefficient model used by the data generator
   name: affine
+
+  # Constant offset ensuring the coefficient stays positive
   base_value: 2.62
+
+  # Mathematical form of the coefficient
+  # The parameters x_j weight sinusoidal basis functions
   formula: "2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)"
 
+
+# Dataset generation settings
 data:
+  # Training set sizes used for learning-curve experiments
   train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
+
+  # Training sizes reported or expected in the reference paper
   paper_train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
+
+  # Number of test samples generated for evaluation
   test_size: 200
-  seeds: [0,1,2]
+
+  # Random seeds used to generate independent dataset repetitions
+  seeds: [0, 1, 2]
+
+  # Floating-point precision used when saving generated arrays
   dtype: float32
 
+
+# Output location for the generated dataset files
 paths:
   output_dir: data/processed/diffusion_affine_d4
+
+"""
+Purpose of the config file is to define the data generation setup for the diffusion benchmark. Ultimate goal is to get trainings pairs.
+
+Affine config because it has the form of a(z,x) = 2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2) affine in the parameter vector x, 
+constant term + linear combination of parameter-weighted basis functions. So it's not just a fixed PDE. Every sampled x defines a different coefficient field
+which gives a different solution.
+
+2,62 chosen because it's slightly larger then the infinite sum, so even if the sum is infinite, the coefficients are still positive. 
+Derivation: 
+\sum_{j=1}^{\inf} 1 / j^(3/2) = 2.612
+so 2,62 is large enough to dominate the possible negative oscillations of the sine expansion.
+
+boundary conditions are dirichlet, as well as not set all to 0 then the solution would be also 0. 
+"""

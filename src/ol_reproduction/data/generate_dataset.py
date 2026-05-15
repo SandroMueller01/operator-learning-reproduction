@@ -29,7 +29,6 @@ from ol_reproduction.pde.navier_stokes_brinkman.fd_solver import (
     flatten_velocity,
     solve_nsb_fd,
 )
-
 from ol_reproduction.pde.boussinesq.fd_solver import (
     BoussinesqSolverParameters,
     flatten_boussinesq_pressure,
@@ -38,6 +37,7 @@ from ol_reproduction.pde.boussinesq.fd_solver import (
     solve_boussinesq_fd,
 )
 
+# Shared type alias for YAML configs after they have been loaded as dictionaries.
 ConfigDict = dict[str, Any]
 
 
@@ -49,6 +49,8 @@ def generate_diffusion_dataset_from_config(config: ConfigDict) -> None:
     config:
         PDE configuration dictionary loaded from YAML.
     """
+    # Split the config into the logical sections used during generation.
+    # This mirrors the structure of configs/pde/diffusion_affine_d4.yaml.
     experiment_config = config["experiment"]
     grid_config = config["grid"]
     pde_config = config["pde"]
@@ -56,15 +58,22 @@ def generate_diffusion_dataset_from_config(config: ConfigDict) -> None:
     data_config = config["data"]
     path_config = config["paths"]
 
+    # Read the core data-generation settings. The dimension controls the
+    # length of each parameter vector x, while train_sizes and seeds define the
+    # repeated learning-curve datasets.
     dimension = int(experiment_config["dimension"])
     train_sizes = [int(size) for size in data_config["train_sizes"]]
     test_size = int(data_config["test_size"])
     seeds = [int(seed) for seed in data_config["seeds"]]
     dtype = _resolve_numpy_dtype(data_config.get("dtype", "float32"))
 
+    # Read the coefficient settings. For the diffusion_affine_d4 config, this
+    # selects the affine coefficient with base value 2.62.
     coefficient_name = str(coefficient_config["name"])
     coefficient_base_value = float(coefficient_config.get("base_value", 2.62))
 
+    # Build the numerical grid and PDE settings used by the finite-difference
+    # solver. The current diffusion implementation uses nx and ny directly.
     output_dir = Path(path_config["output_dir"])
     grid = DiffusionGrid(
         nx=int(grid_config["nx"]),
@@ -73,8 +82,13 @@ def generate_diffusion_dataset_from_config(config: ConfigDict) -> None:
     boundary_conditions = _build_diffusion_boundary_conditions(pde_config)
     forcing = float(pde_config["forcing"])
 
+    # Create the spatial grid coordinate used to evaluate the coefficient
+    # a(z, x). Only z1 is needed for the current coefficient formula.
     z1, _ = create_diffusion_grid(grid)
 
+    # For each seed, generate one independent test set and all requested
+    # training sizes. The test seed is shifted to avoid overlapping train and
+    # test samples for the same base seed.
     for seed in seeds:
         test_dataset = _generate_single_diffusion_dataset(
             num_samples=test_size,
@@ -92,6 +106,7 @@ def generate_diffusion_dataset_from_config(config: ConfigDict) -> None:
             arrays=test_dataset,
         )
 
+        # Generate one training file for each learning-curve sample size.
         for train_size in train_sizes:
             train_dataset = _generate_single_diffusion_dataset(
                 num_samples=train_size,
@@ -109,6 +124,8 @@ def generate_diffusion_dataset_from_config(config: ConfigDict) -> None:
                 arrays=train_dataset,
             )
 
+    # Store metadata so that generated arrays can later be interpreted without
+    # reopening the original YAML file.
     metadata = _build_metadata(
         config=config,
         grid_shape=(grid.ny, grid.nx),
@@ -131,6 +148,8 @@ def generate_nsb_dataset_from_config(config: ConfigDict) -> None:
     config:
         PDE configuration dictionary loaded from YAML.
     """
+    # This follows the same high-level pattern as the diffusion generator:
+    # read config, sample parameters, solve the PDE, and save arrays.
     experiment_config = config["experiment"]
     grid_config = config["grid"]
     coefficient_config = config["coefficient"]
@@ -152,6 +171,7 @@ def generate_nsb_dataset_from_config(config: ConfigDict) -> None:
         ny=int(grid_config["ny"]),
     )
 
+    # The viscosity field is evaluated using the first spatial coordinate.
     z1, _ = create_nsb_grid(grid)
 
     for seed in seeds:
@@ -201,6 +221,7 @@ def generate_nsb_dataset_from_config(config: ConfigDict) -> None:
         metadata=metadata,
     )
 
+
 def generate_boussinesq_dataset_from_config(config: ConfigDict) -> None:
     """Generate train and test datasets for the simplified Boussinesq problem.
 
@@ -209,6 +230,8 @@ def generate_boussinesq_dataset_from_config(config: ConfigDict) -> None:
     config:
         PDE configuration dictionary loaded from YAML.
     """
+    # Boussinesq generation follows the same dataset structure, but produces
+    # velocity, temperature, and pressure targets.
     experiment_config = config["experiment"]
     grid_config = config["grid"]
     coefficient_config = config["coefficient"]
@@ -229,6 +252,8 @@ def generate_boussinesq_dataset_from_config(config: ConfigDict) -> None:
     nx = int(grid_config["nx"])
     ny = int(grid_config["ny"])
 
+    # The current implementation uses a 2D slice even if the paper/config
+    # describes a higher-dimensional Boussinesq setup.
     z1 = _create_2d_z1_grid(nx=nx, ny=ny)
 
     for seed in seeds:
@@ -281,6 +306,7 @@ def generate_boussinesq_dataset_from_config(config: ConfigDict) -> None:
         metadata=metadata,
     )
 
+
 def _generate_single_diffusion_dataset(
     num_samples: int,
     dimension: int,
@@ -293,6 +319,8 @@ def _generate_single_diffusion_dataset(
     coefficient_base_value: float,
 ) -> dict[str, np.ndarray]:
     """Generate one diffusion dataset split."""
+    # Sample input vectors x from the configured parameter domain. Each row is
+    # one PDE instance, for example x in R^4 for diffusion_affine_d4.
     parameters = sample_uniform_parameters(
         num_samples=num_samples,
         dimension=dimension,
@@ -302,6 +330,8 @@ def _generate_single_diffusion_dataset(
 
     solutions = []
 
+    # For each parameter vector, build the coefficient field, solve the PDE,
+    # flatten the grid solution, and add it to the dataset.
     for parameter_vector in parameters:
         coefficient = _evaluate_coefficient(
             coefficient_name=coefficient_name,
@@ -316,6 +346,8 @@ def _generate_single_diffusion_dataset(
         )
         solutions.append(flatten_solution(solution))
 
+    # Stack individual flattened solutions into a matrix of shape
+    # (num_samples, nx * ny).
     solution_array = np.stack(solutions, axis=0).astype(dtype)
 
     return {
@@ -344,6 +376,8 @@ def _generate_single_nsb_dataset(
     velocities = []
     pressures = []
 
+    # In this simplified NSB setup, the parameterized coefficient is interpreted
+    # as a viscosity field.
     for parameter_vector in parameters:
         viscosity = _evaluate_coefficient(
             coefficient_name=coefficient_name,
@@ -367,6 +401,7 @@ def _generate_single_nsb_dataset(
         "y_u": velocity_array,
         "y_p": pressure_array,
     }
+
 
 def _generate_single_boussinesq_dataset(
     num_samples: int,
@@ -412,6 +447,9 @@ def _generate_single_boussinesq_dataset(
     temperatures = []
     pressures = []
 
+    # The simplified Boussinesq generator creates two related coefficients:
+    # viscosity from the original parameter order and thermal conductivity from
+    # the reversed parameter order.
     for parameter_vector in parameters:
         viscosity = _evaluate_coefficient(
             coefficient_name=coefficient_name,
@@ -448,6 +486,7 @@ def _generate_single_boussinesq_dataset(
         "y_p": pressure_array,
     }
 
+
 def _evaluate_coefficient(
     coefficient_name: str,
     z1: np.ndarray,
@@ -455,6 +494,8 @@ def _evaluate_coefficient(
     base_value: float,
 ) -> np.ndarray:
     """Evaluate configured coefficient."""
+    # Central coefficient dispatch. This keeps the dataset generators independent
+    # of the concrete coefficient implementation.
     if coefficient_name == "affine":
         return affine_coefficient(
             z1=z1,
@@ -478,6 +519,8 @@ def _build_diffusion_boundary_conditions(
     """Build diffusion boundary condition dataclass from config."""
     boundary_config = pde_config["boundary_conditions"]
 
+    # Convert YAML boundary values into the dataclass expected by the diffusion
+    # finite-difference solver.
     return DiffusionBoundaryConditions(
         bottom=float(boundary_config["bottom"]),
         top=float(boundary_config["top"]),
@@ -488,6 +531,8 @@ def _build_diffusion_boundary_conditions(
 
 def _resolve_numpy_dtype(dtype_name: str) -> np.dtype:
     """Resolve dtype string to NumPy dtype."""
+    # Restrict dtypes to supported floating-point formats so invalid config
+    # values fail early with a clear error.
     if dtype_name == "float32":
         return np.float32
 
@@ -504,6 +549,8 @@ def _build_metadata(
     note: str,
 ) -> dict[str, Any]:
     """Build dataset metadata."""
+    # Metadata records the config and output dimensions next to the generated
+    # arrays, making the dataset self-describing.
     return {
         "experiment": config["experiment"],
         "grid": {
@@ -517,6 +564,8 @@ def _build_metadata(
         },
         "note": note,
     }
+
+
 def _create_2d_z1_grid(nx: int, ny: int) -> np.ndarray:
     """Create the first coordinate grid for a two-dimensional unit square.
 
@@ -532,6 +581,8 @@ def _create_2d_z1_grid(nx: int, ny: int) -> np.ndarray:
     np.ndarray
         First coordinate grid with shape ``(ny, nx)``.
     """
+    # Create a unit-square grid and return only the first spatial coordinate.
+    # This is enough for coefficient functions depending on z1.
     x_values = np.linspace(0.0, 1.0, nx)
     y_values = np.linspace(0.0, 1.0, ny)
     z1, _ = np.meshgrid(x_values, y_values, indexing="xy")

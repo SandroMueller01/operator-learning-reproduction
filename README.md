@@ -17,18 +17,18 @@ The original paper uses FEniCS-based mixed finite element solvers to generate PD
 
 Implemented problems:
 
-| Problem | Targets | Implementation status |
-|---|---:|---|
-| Diffusion equation | `u` | Closest finite-difference reproduction |
-| Navier--Stokes--Brinkman | `u`, `p` | Simplified finite-difference Brinkman-type analogue |
-| Boussinesq | `u`, `phi`, `p` | Simplified finite-difference Boussinesq-style analogue |
+| Problem | Targets | Implementation status                                 |
+|---|---:|-------------------------------------------------------|
+| Diffusion equation | `u` | Evaluation needed                                     |
+| Navier--Stokes--Brinkman | `u`, `p` | Finite difference method atm, still in dev            |
+| Boussinesq | `u`, `phi`, `p` | Finite difference method atm, still in dev   |
 
 Implemented frameworks:
 
-| Framework | Status |
-|---|---|
-| PyTorch | Implemented |
-| JAX | Implemented |
+| Framework | Status                   |
+|---|--------------------------|
+| PyTorch | Implemented, val needed  |
+| JAX | Implemented , val needed |
 
 Implemented model type:
 
@@ -42,9 +42,8 @@ Supported activations:
 relu
 elu
 tanh
-Supported architectures:
 ````
-
+Supported architectures:
 ```text
 4 x 40
 10 x 100
@@ -654,73 +653,75 @@ If FEniCS is not installed, FEniCS-specific functionality should not be treated 
 
 ---
 
-## Practical Reproduction versus Exact Paper Reproduction
+## Full pipeline execution example
+```mermaid
+flowchart TD
+    A["configs/pde/diffusion_affine_d4.yaml<br/>PDE + data-generation config"]
+    B["scripts/generate_data.py<br/>CLI entry point"]
+    C["load_yaml(...)<br/>src/ol_reproduction/common/config.py"]
+    D["_validate_pde_only_config(...)<br/>scripts/generate_data.py"]
+    E["Dispatch by problem='diffusion'<br/>scripts/generate_data.py"]
 
-This repository currently focuses on a practical finite-difference reproduction pipeline.
+    F["generate_diffusion_dataset_from_config(...)<br/>src/ol_reproduction/data/generate_dataset.py"]
+    G["Create grid + boundary conditions<br/>src/ol_reproduction/pde/diffusion/fd_solver.py"]
+    H["Loop over seeds and train sizes<br/>src/ol_reproduction/data/generate_dataset.py"]
 
-The following parts are aligned with the paper:
+    I["_generate_single_diffusion_dataset(...)<br/>src/ol_reproduction/data/generate_dataset.py"]
+    J["sample_uniform_parameters(...)<br/>src/ol_reproduction/data/sampling.py"]
+    K["x shape = num_samples × 4"]
 
-```text
-parametric coefficient structure
-training set size experiments
-MLP architectures
-activation comparisons
-PyTorch/JAX implementation comparison
-relative test error evaluation
-multi-target operator learning setup
-```
+    L["_evaluate_coefficient(...)<br/>src/ol_reproduction/data/generate_dataset.py"]
+    M["affine_coefficient(...)<br/>src/ol_reproduction/coefficients/affine.py"]
+    N["a(z,x) = 2.62 + Σ x_j sin(π z₁ j) / j^(3/2)"]
 
-The following parts deviate from the paper:
+    O["solve_diffusion_fd(...)<br/>src/ol_reproduction/pde/diffusion/fd_solver.py"]
+    P["Solves: -div(a(z,x) ∇u(z)) = 10"]
 
-```text
-finite-difference solvers instead of FEniCS mixed FEM solvers
-simplified Navier--Stokes--Brinkman solver
-simplified two-dimensional Boussinesq-style solver
-Monte Carlo-style generated test data instead of sparse-grid quadrature testing
-reduced default trial count
-reduced default training matrix
-```
+    Q["flatten_solution(...)<br/>src/ol_reproduction/pde/diffusion/fd_solver.py"]
+    R["y_u shape = num_samples × 256"]
 
-For exact solver-level reproduction, one would need to implement the FEniCS mixed finite element solvers for the diffusion, Navier--Stokes--Brinkman, and Boussinesq benchmarks.
+    S["save_npz_dataset(...)<br/>src/ol_reproduction/data/dataset_io.py"]
+    T["save_metadata(...)<br/>src/ol_reproduction/data/dataset_io.py"]
 
-Optional FEniCS scaffolding is included as an extension point, but the main practical pipeline uses finite differences.
+    U["data/processed/diffusion_affine_d4/*.npz<br/>contains x and y_u"]
+    V["data/processed/diffusion_affine_d4/metadata.json"]
 
----
+    W["Training scripts<br/>scripts/train_pytorch.py<br/>scripts/train_jax.py"]
+    X["Model learns x → y_u<br/>input dim = 4, output dim = 256"]
+    Y["Evaluation<br/>relative error on test set"]
+    Z["results/<br/>metrics, figures, tables"]
 
-## Recommended Final Workflow
+    A --> B
+    B --> C
+    B --> D
+    B --> E
+    E --> F
 
-For the stable practical pipeline:
+    F --> G
+    F --> H
+    H --> I
 
-```powershell
-$env:PYTHONPATH = "src"
+    I --> J
+    J --> K
 
-python -m pytest -q tests
+    I --> L
+    L --> M
+    M --> N
 
-Remove-Item results/metrics/*debug.csv -ErrorAction SilentlyContinue
-Remove-Item results/figures/*error_vs_m.png -ErrorAction SilentlyContinue
-Remove-Item results/tables/summary_metrics.csv -ErrorAction SilentlyContinue
+    I --> O
+    O --> P
 
-python scripts/run_all_available.py --continue-on-error
-python scripts/summarize_results.py --print-table
-```
+    O --> Q
+    Q --> R
 
-This regenerates:
+    I --> S
+    F --> T
 
-```text
-results/metrics/
-results/figures/
-results/tables/summary_metrics.csv
-```
+    S --> U
+    T --> V
 
----
-
-## Current Interpretation
-
-The diffusion benchmark should be interpreted as the closest reproduction of the paper.
-
-The Navier--Stokes--Brinkman and Boussinesq benchmarks should be interpreted as simplified finite-difference analogues that allow the same operator-learning pipeline to be tested on multi-output PDE-like data.
-
-This distinction is important for the final report.
-
-```
+    U --> W
+    W --> X
+    X --> Y
+    Y --> Z
 ```

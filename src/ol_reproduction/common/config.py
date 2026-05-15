@@ -11,58 +11,58 @@ import yaml
 ConfigDict = dict[str, Any]
 
 
-_ALLOWED_PROBLEMS = {
+_allowed_problems = {
     "diffusion",
     "navier_stokes_brinkman",
     "boussinesq",
 }
 
-_ALLOWED_COEFFICIENTS = {
+_allowed_coefficients = {
     "affine",
     "log",
 }
 
-_ALLOWED_TARGETS = {
+_allowed_targets = {
     "u",
     "p",
     "phi",
 }
 
-_ALLOWED_MODEL_TYPES = {
+_allowed_model_types = {
     "mlp",
 }
 
-_ALLOWED_ACTIVATIONS = {
+_allowed_activations = {
     "relu",
     "elu",
     "tanh",
 }
 
-_ALLOWED_INITIALIZATIONS = {
+_allowed_initializations = {
     "default",
     "kaiming_uniform",
     "xavier_uniform",
 }
 
-_ALLOWED_FRAMEWORKS = {
+_allowed_frameworks = {
     "pytorch",
     "jax",
 }
 
-_ALLOWED_OPTIMIZERS = {
+_allowed_optimizers = {
     "adam",
 }
 
-_ALLOWED_SCHEDULERS = {
+_allowed_schedulers = {
     "none",
     "exponential_decay",
 }
 
-_ALLOWED_LOSSES = {
+_allowed_losses = {
     "mse",
 }
 
-_ALLOWED_DTYPES = {
+_allowed_dtypes = {
     "float32",
     "float64",
 }
@@ -267,16 +267,16 @@ def _validate_experiment_config(experiment: ConfigDict) -> None:
     problem = str(experiment["problem"])
     coefficient = str(experiment["coefficient"])
 
-    if problem not in _ALLOWED_PROBLEMS:
+    if problem not in _allowed_problems:
         raise ValueError(
             "experiment.problem must be one of "
-            f"{sorted(_ALLOWED_PROBLEMS)}, got {problem!r}."
+            f"{sorted(_allowed_problems)}, got {problem!r}."
         )
 
-    if coefficient not in _ALLOWED_COEFFICIENTS:
+    if coefficient not in _allowed_coefficients:
         raise ValueError(
             "experiment.coefficient must be one of "
-            f"{sorted(_ALLOWED_COEFFICIENTS)}, got {coefficient!r}."
+            f"{sorted(_allowed_coefficients)}, got {coefficient!r}."
         )
 
     if int(experiment["dimension"]) <= 0:
@@ -301,10 +301,10 @@ def _validate_targets(experiment: ConfigDict) -> None:
     if has_target:
         target = str(experiment["target"])
 
-        if target not in _ALLOWED_TARGETS:
+        if target not in _allowed_targets:
             raise ValueError(
                 "experiment.target must be one of "
-                f"{sorted(_ALLOWED_TARGETS)}, got {target!r}."
+                f"{sorted(_allowed_targets)}, got {target!r}."
             )
 
     if has_targets:
@@ -319,10 +319,10 @@ def _validate_targets(experiment: ConfigDict) -> None:
         for target in targets:
             target_name = str(target)
 
-            if target_name not in _ALLOWED_TARGETS:
+            if target_name not in _allowed_targets:
                 raise ValueError(
                     "All experiment.targets must be one of "
-                    f"{sorted(_ALLOWED_TARGETS)}, got {target_name!r}."
+                    f"{sorted(_allowed_targets)}, got {target_name!r}."
                 )
 
 
@@ -463,10 +463,10 @@ def _validate_coefficient_config(coefficient: ConfigDict) -> None:
 
     coefficient_name = str(coefficient["name"])
 
-    if coefficient_name not in _ALLOWED_COEFFICIENTS:
+    if coefficient_name not in _allowed_coefficients:
         raise ValueError(
             "coefficient.name must be one of "
-            f"{sorted(_ALLOWED_COEFFICIENTS)}, got {coefficient_name!r}."
+            f"{sorted(_allowed_coefficients)}, got {coefficient_name!r}."
         )
 
     _require_numeric_value(coefficient["base_value"], "coefficient.base_value")
@@ -515,10 +515,10 @@ def _validate_data_config(data: ConfigDict) -> None:
         if int(seed) < 0:
             raise ValueError("All data.seeds must be non-negative.")
 
-    if dtype not in _ALLOWED_DTYPES:
+    if dtype not in _allowed_dtypes:
         raise ValueError(
             "data.dtype must be one of "
-            f"{sorted(_ALLOWED_DTYPES)}, got {dtype!r}."
+            f"{sorted(_allowed_dtypes)}, got {dtype!r}."
         )
 
 
@@ -553,10 +553,10 @@ def _validate_model_config(model: ConfigDict) -> None:
     model_type = str(model["type"])
     activation = str(model["activation"])
 
-    if model_type not in _ALLOWED_MODEL_TYPES:
+    if model_type not in _allowed_model_types:
         raise ValueError(
             "model.type must be one of "
-            f"{sorted(_ALLOWED_MODEL_TYPES)}, got {model_type!r}."
+            f"{sorted(_allowed_model_types)}, got {model_type!r}."
         )
 
     if int(model["depth"]) <= 0:
@@ -565,10 +565,10 @@ def _validate_model_config(model: ConfigDict) -> None:
     if int(model["width"]) <= 0:
         raise ValueError("model.width must be positive.")
 
-    if activation not in _ALLOWED_ACTIVATIONS:
+    if activation not in _allowed_activations:
         raise ValueError(
             "model.activation must be one of "
-            f"{sorted(_ALLOWED_ACTIVATIONS)}, got {activation!r}."
+            f"{sorted(_allowed_activations)}, got {activation!r}."
         )
 
 
@@ -579,10 +579,10 @@ def _validate_initialization_config(initialization: ConfigDict) -> None:
 
     initialization_name = str(initialization["name"])
 
-    if initialization_name not in _ALLOWED_INITIALIZATIONS:
+    if initialization_name not in _allowed_initializations:
         raise ValueError(
             "initialization.name must be one of "
-            f"{sorted(_ALLOWED_INITIALIZATIONS)}, "
+            f"{sorted(_allowed_initializations)}, "
             f"got {initialization_name!r}."
         )
 
@@ -608,19 +608,19 @@ def _validate_training_config(training: ConfigDict) -> None:
     framework = str(training["framework"])
     dtype = str(training["dtype"])
 
-    if framework not in _ALLOWED_FRAMEWORKS:
+    if framework not in _allowed_frameworks:
         raise ValueError(
             "training.framework must be one of "
-            f"{sorted(_ALLOWED_FRAMEWORKS)}, got {framework!r}."
+            f"{sorted(_allowed_frameworks)}, got {framework!r}."
         )
 
     if int(training["epochs"]) <= 0:
         raise ValueError("training.epochs must be positive.")
 
-    if dtype not in _ALLOWED_DTYPES:
+    if dtype not in _allowed_dtypes:
         raise ValueError(
             "training.dtype must be one of "
-            f"{sorted(_ALLOWED_DTYPES)}, got {dtype!r}."
+            f"{sorted(_allowed_dtypes)}, got {dtype!r}."
         )
 
     _validate_optimizer_config(training["optimizer"])
@@ -645,10 +645,10 @@ def _validate_optimizer_config(optimizer: Any) -> None:
 
     optimizer_name = str(optimizer["name"])
 
-    if optimizer_name not in _ALLOWED_OPTIMIZERS:
+    if optimizer_name not in _allowed_optimizers:
         raise ValueError(
             "training.optimizer.name must be one of "
-            f"{sorted(_ALLOWED_OPTIMIZERS)}, got {optimizer_name!r}."
+            f"{sorted(_allowed_optimizers)}, got {optimizer_name!r}."
         )
 
     if float(optimizer["learning_rate"]) <= 0.0:
@@ -668,10 +668,10 @@ def _validate_scheduler_config(scheduler: Any) -> None:
 
     scheduler_name = str(scheduler["name"])
 
-    if scheduler_name not in _ALLOWED_SCHEDULERS:
+    if scheduler_name not in _allowed_schedulers:
         raise ValueError(
             "training.scheduler.name must be one of "
-            f"{sorted(_ALLOWED_SCHEDULERS)}, got {scheduler_name!r}."
+            f"{sorted(_allowed_schedulers)}, got {scheduler_name!r}."
         )
 
     if scheduler_name == "exponential_decay":
@@ -726,10 +726,10 @@ def _validate_loss_config(loss: Any) -> None:
 
     loss_name = str(loss["name"])
 
-    if loss_name not in _ALLOWED_LOSSES:
+    if loss_name not in _allowed_losses:
         raise ValueError(
             "training.loss.name must be one of "
-            f"{sorted(_ALLOWED_LOSSES)}, got {loss_name!r}."
+            f"{sorted(_allowed_losses)}, got {loss_name!r}."
         )
 
 
