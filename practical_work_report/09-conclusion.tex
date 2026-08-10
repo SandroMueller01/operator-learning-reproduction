@@ -1,0 +1,109 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{Discussion and Conclusion}
+\label{sec:conclusion}
+
+\section{Discussion}
+
+The reproduction succeeded in the sense that matters for this practical
+work: not bit-exact agreement with the paper's plotted curves, which is not
+achievable given the TensorFlow/Keras~$\to$~PyTorch/JAX framework
+substitution that predates this report, but agreement in the paper's
+qualitative claims. Across both the Hilbert-valued diffusion experiment and
+the Banach-valued NSB experiment, the reproduced error decays at
+approximately the paper's reported $O(m^{-1})$ rate (fitted slopes between
+$-0.91$ and $-1.06$ across all cases and both output targets), and
+ELU/tanh architectures beat ReLU by a wide, consistent margin everywhere --
+the single most robust finding in the whole study. The claim of no
+degradation from $d=4$ to $d=8$ is the one place the reproduction diverges
+from a clean match: it holds for the architectures the paper itself
+prefers (ELU/tanh) but not for ReLU, and, interestingly, the specific
+property that predicts robustness differs between the two PDEs
+(activation for diffusion, architecture size for NSB;
+Section~\ref{sec:experimentalresults}). This is reported as a genuine
+empirical finding rather than reconciled away, since it is consistent
+across coefficient families within each PDE.
+
+PyTorch and JAX agree with each other closely under the identical protocol
+described in Section~\ref{sec:jaximplementation}: relative test error
+differs by well under 1.5\% between frameworks in every one of the twelve
+cases (Section~\ref{sec:framework-comparison-results}). This close
+agreement is itself evidence that any remaining mismatch with the paper's
+own reported numbers comes from the framework substitution and the
+documented data-generation deviations (Appendix~\ref{app:an-appendix}),
+rather than from an error specific to this reproduction's own pipeline --
+if the pipeline itself were unreliable, two independently implemented
+frameworks trained on identical data would have no particular reason to
+agree this closely. Training time is a different story: JAX is faster for
+diffusion in every case (9--28\%), but the NSB results are mixed, with
+PyTorch occasionally faster -- consistent with the sweep's many distinct
+architecture/training-size shape combinations eating into JAX's
+JIT-compilation advantage, an effect anticipated in
+Section~\ref{sec:jaximplementation} before the full sweep was run.
+
+\section{Limitations}
+
+The stationary Boussinesq equation, the paper's third experiment, was out
+of scope for this practical work (Section~\ref{sec:problemStatement}). The
+NSB finite element family and inlet/pressure conventions were reconstructed
+from the paper's cited source and calibrated against the paper's reported
+figures rather than read off an explicit formula stated in the paper itself
+(Section~\ref{sec:methodology}). The diffusion mesh is structured rather
+than the unstructured mesh the paper's own figures suggest, due to a
+tooling incompatibility (Appendix~\ref{app:an-appendix}). The sparse-grid
+test level was chosen empirically rather than taken from a value stated in
+the paper. NSB training additionally uses a reduced epoch budget and a
+looser loss tolerance than the paper specifies
+(Appendix~\ref{app:an-appendix}), a deviation made necessary by measured
+wall-clock cost rather than by any property of the paper's method itself;
+Section~\ref{sec:experimentalresults} shows this most plausibly explains
+NSB's slightly shallower fitted decay rate relative to diffusion, and it
+means the NSB numbers in this report are not run under a strictly
+paper-identical training budget the way the diffusion numbers are.
+Finally, all absolute error magnitudes in this report are specific to the
+PyTorch/JAX implementations and the mesh/element choices described above;
+they should not be read as literal reproductions of the paper's own
+plotted values, only as a check on the paper's qualitative claims.
+
+\section{Conclusion}
+
+Both PyTorch and JAX reproductions of the diffusion and NSB experiments
+recover the paper's central qualitative findings -- an approximately
+$m^{-1}$ error-decay rate and a clear activation-function ranking -- using
+the paper's own mixed finite element data-generation pipeline and
+sparse-grid test protocol rather than a simplified stand-in, at the paper's
+full experimental scale (2 PDEs, 2 coefficient families, 2 dimensions, 6
+architectures, 14 training sizes, 12 trials, both frameworks: 24,094
+completed training runs (7,966 diffusion, 16,128 NSB) with zero failures).
+
+Implementing the paper's protocol precisely rather than approximately
+turned out to matter in several concrete ways that a looser reproduction
+would have missed entirely: the diffusion mixed formulation's natural
+(rather than essential) boundary condition changes what "implementing the
+boundary condition" even means at the code level; Keras'
+activation-agnostic \texttt{HeUniform} initializer is a silent, easy-to-miss
+mismatch against both PyTorch's and JAX's own activation-aware defaults;
+and the paper's two-trigger checkpoint/restore rule (best-loss-so-far
+\emph{or} an eighth-ratio drop) is meaningfully different from, and not
+reducible to, a simple best-loss tracker. Each of these was only caught by
+implementing the letter of the paper's appendix rather than a plausible
+approximation of it. Recovering the paper's qualitative claims despite
+these implementation-level departures from a naive reading of the method
+description suggests the paper's reported behavior is a robust property of
+the method, not an artifact of one specific framework or one specific
+finite element choice.
+
+The most natural next step for extending this reproduction is adding the
+stationary Boussinesq equation, the paper's third experiment, which was
+excluded from this practical work's scope
+(Section~\ref{sec:problemStatement}) but would complete the paper's full
+experimental picture using the same infrastructure built here. A second
+natural extension is re-running the NSB experiment under the paper's full,
+un-reduced training budget (Appendix~\ref{app:an-appendix}) given more
+compute time than was available for this practical work, to check whether
+NSB's slightly shallower fitted decay rate closes the small remaining gap
+to diffusion's.
+
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

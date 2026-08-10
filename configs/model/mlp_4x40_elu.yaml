@@ -1,0 +1,10 @@
+# Paper architecture: depth=4, width=40 (beta = L/N = 0.5), ELU activation.
+model:
+  name: mlp_4x40_elu
+  type: mlp
+  depth: 4
+  width: 40
+  activation: elu
+
+initialization:
+  name: kaiming_uniform

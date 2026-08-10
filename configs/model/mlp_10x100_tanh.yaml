@@ -1,0 +1,10 @@
+# Paper architecture: depth=10, width=100 (beta = L/N = 0.5), tanh activation.
+model:
+  name: mlp_10x100_tanh
+  type: mlp
+  depth: 10
+  width: 100
+  activation: tanh
+
+initialization:
+  name: kaiming_uniform

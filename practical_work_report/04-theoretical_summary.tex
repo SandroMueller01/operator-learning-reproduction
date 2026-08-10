@@ -1,0 +1,121 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{Theoretical Summary of the Paper}
+\label{sec:theoreticalSummary}
+This chapter summarizes the theoretical framework of the target paper
+\cite{adcock2024holomorphic}. The aim is not to reproduce the proofs, but to identify the parts of the theory that are relevant for the practical
+reimplementation. The paper studies deep learning of holomorphic operators
+between Banach spaces and proves near-optimal generalization bounds for the resulting learned approximations.
+
+\section{Learning Setup}
+
+Building on the operator-learning formulation introduced in Section~\ref{sec:background}, the target paper studies an unknown operator
+\[
+    F : \mathcal{X} \to \mathcal{Y},
+\]
+where $\mathcal{X}$ and $\mathcal{Y}$ are Banach spaces. The objective is to learn an approximation of $F$ from finitely many training samples.
+
+The available data are assumed to be of the form
+\[
+    \{(X_i,Y_i)\}_{i=1}^{m},
+    \qquad
+    Y_i = F(X_i) + E_i,
+\]
+where $X_1,\ldots,X_m$ are independent samples drawn according to a probability measure $\mu$ on $\mathcal{X}$ and $E_i \in \mathcal{Y}$ denotes noise or numerical error.
+
+The learned operator is constructed using an encoder--network--decoder
+architecture:
+\[
+    \widehat{F}
+    =
+    D_{\mathcal{Y}} \circ \widehat{N} \circ E_{\mathcal{X}}.
+\]
+Here,
+\[
+    E_{\mathcal{X}} : \mathcal{X} \to \mathbb{R}^{d_{\mathcal{X}}},
+    \qquad
+    \widehat{N} : \mathbb{R}^{d_{\mathcal{X}}}
+    \to \mathbb{R}^{d_{\mathcal{Y}}},
+    \qquad
+    D_{\mathcal{Y}} : \mathbb{R}^{d_{\mathcal{Y}}} \to \mathcal{Y}.
+\]
+The encoder maps the input to a finite-dimensional representation, the neural network learns the finite-dimensional map, and the decoder reconstructs an element of the output space.
+
+The neural network is trained by empirical risk minimization with squared loss:
+\[
+    \widehat{N}
+    \in
+    \arg\min_{N \in \mathcal{N}}
+    \frac{1}{m}
+    \sum_{i=1}^{m}
+    \left\|
+        Y_i
+        -
+        D_{\mathcal{Y}} \circ N \circ E_{\mathcal{X}}(X_i)
+    \right\|_{\mathcal{Y}}^2,
+\]
+where $\mathcal{N}$ denotes a class of feedforward neural networks.
+
+The central regularity assumption is that the target operator admits a
+holomorphic parametrization
+\[
+    F = f \circ \iota,
+\]
+where $\iota : \mathcal{X} \to \mathbb{R}^{\mathbb{N}}$ maps the input to an infinite-dimensional parameter sequence and $f$ belongs to a Banach-valued holomorphic function class. This assumption is what enables the algebraic learning rates proved in the paper.
+
+\section{Generalization Error Components}
+
+The main theoretical bounds estimate the generalization error of the learned operator. This error measures how well $\widehat{F}$ approximates $F$ on new inputs drawn from the same distribution $\mu$, rather than only on the training samples -- the same finite-sample-to-population question addressed generically by classical statistical learning theory, e.g.\ via Rademacher-complexity-based risk bounds \cite{bartlettmendelson2002}, here specialized to an operator-valued, holomorphy-structured hypothesis class.
+
+The paper decomposes the error into several components:
+\[
+    \|F - \widehat{F}\|
+    \lesssim
+    E_{\mathrm{app}}
+    +
+    E_{\mathcal{X}}
+    +
+    E_{\mathcal{Y}}
+    +
+    E_{\mathrm{opt}}
+    +
+    E_{\mathrm{samp}}.
+\]
+Each term corresponds to a different source of error.
+
+The approximation error $E_{\mathrm{app}}$ measures how well the neural network class can approximate the target operator under the holomorphy assumption. This is the main term in the theoretical analysis, and it is where the paper connects to an established line of work on sparse polynomial approximation of holomorphic, parametric PDE solution maps \cite{cohendeVoreschwab2011,chkifa2015breaking}, which shows that holomorphic dependence on the parameters yields dimension-robust algebraic approximation rates rather than the exponential cost a naive tensor-product argument would predict; the paper's neural-network bounds inherit this structure, and a directly analogous approximation-rate analysis exists for the closely related DeepONet architecture \cite{lanthaler2022deeponet}. For Hilbert-valued outputs, the paper obtains an algebraic rate of the form
+\[
+    E_{\mathrm{app}} \sim m^{1/2 - 1/p},
+\]
+up to logarithmic factors, where $p$ is related to the summability of the
+holomorphy weights.
+
+The input encoding error $E_{\mathcal{X}}$ measures the loss caused by replacing the original input $X \in \mathcal{X}$ with its finite-dimensional encoded representation. The output decoding error $E_{\mathcal{Y}}$ measures the loss caused by reconstructing an element of $\mathcal{Y}$ from a finite-dimensional vector.
+
+The optimization error $E_{\mathrm{opt}}$ accounts for the fact that the
+empirical training problem may only be solved approximately. This is relevant because neural network training is nonconvex in practice. The sampling error $E_{\mathrm{samp}}$ captures the influence of noise or numerical error in the training data,
+\[
+    Y_i = F(X_i) + E_i.
+\]
+
+This decomposition is important for the reproduction because it clarifies which sources of error are controlled by the neural network training and which are introduced by the discretization, data generation, and optimization procedure.
+
+\section{Main Theoretical Results}
+
+The paper contains three main types of theoretical results: upper bounds for suitable neural network architectures, results for fully connected networks, and lower bounds showing near-optimality.
+
+The first result states that there exist feedforward neural network
+architectures that achieve near-optimal generalization bounds for the considered class of holomorphic operators. The architecture sizes depend mainly on the number of training samples $m$, rather than on detailed regularity parameters of the specific target operator. For this reason, the paper describes these architectures as problem agnostic -- a stronger, more explicit statement than the general neural-operator framework typically provides \cite{kovachki2023neuraloperator}, where architecture choice is usually guided by the specific operator family rather than derived from a sample-complexity bound alone.
+
+The resulting high-probability bounds control the error between $F$ and
+$\widehat{F}$ in suitable $L^2_\mu$ and $L^\infty_\mu$ norms. The bounds differ between Hilbert- and Banach-valued outputs. In the Hilbert case, the theorem controls the standard Bochner $L^2_\mu$ error, while in the Banach case it gives a bound in a weaker Pettis-type norm.
+
+The second result concerns fully connected neural networks. While the first architecture result is mainly theoretical, the paper also shows that sufficiently wide and deep fully connected networks contain many minimizers that achieve the same type of generalization behaviour. In particular, the training problem has uncountably many minimizers satisfying the desired bounds. This result does not guarantee that every minimizer found by gradient-based training is optimal, but it helps justify the use of standard fully connected networks in the numerical
+experiments.
+
+The third result consists of lower bounds. The paper proves that no recovery procedure can improve the learning rates beyond logarithmic factors for the considered class of holomorphic operators. This means that the obtained rates are essentially optimal for the problem class, not only for a particular neural network architecture.
+
+Together, these results provide the theoretical motivation for the numerical experiments. They suggest that standard neural networks can achieve algebraic convergence rates for holomorphic parametric PDE solution operators. The finite-dimensional specialization used in the reproduction is described in the following methodology chapter. 
+%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

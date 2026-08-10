@@ -1,0 +1,23 @@
+# NSB-specific training config -- see configs/train/pytorch_nsb.yaml for
+# the full rationale (documented deviation from the paper's 60,000-epoch /
+# 5e-7-tolerance protocol, applied only to the Navier-Stokes-Brinkman
+# experiment). Identical reduction applied here for the JAX side so both
+# frameworks train NSB under the same protocol.
+training:
+  framework: jax
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+  scheduler:
+    name: exponential_decay
+    decay_rate: 0.9999
+  batch_size: full
+  epochs: 20000
+  loss_tolerance: 5.0e-6
+  loss:
+    name: mse
+  dtype: float32
+
+logging:
+  log_every: 1000

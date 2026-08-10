@@ -1,0 +1,10 @@
+# Paper architecture: depth=10, width=100 (beta = L/N = 0.5), elu activation.
+model:
+  name: mlp_10x100_elu
+  type: mlp
+  depth: 10
+  width: 100
+  activation: elu
+
+initialization:
+  name: kaiming_uniform

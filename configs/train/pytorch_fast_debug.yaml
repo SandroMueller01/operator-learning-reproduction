@@ -1,0 +1,25 @@
+# Fast debug training config for PyTorch smoke tests. Not paper-accurate
+# (few epochs, no LR decay). See configs/train/pytorch_paper.yaml (Phase 9)
+# for the full paper-spec training config (Adam, exponential-decay LR,
+# 60,000 epoch cap, 5e-7 loss tolerance, checkpoint-ratio-1/8 rule).
+training:
+  framework: pytorch
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+  scheduler:
+    name: none
+  batch_size: full
+  epochs: 200
+  early_stopping:
+    enabled: false
+    patience: 100
+    min_delta: 1.0e-8
+  loss:
+    name: mse
+  device: auto
+  dtype: float32
+
+logging:
+  log_every: 50

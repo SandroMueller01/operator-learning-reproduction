@@ -1,0 +1,66 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 
+%% Abstract of your thesis in default document language
+%% 
+
+\cleardoubleoddpage%  Make sure to start abstract on a new odd page
+\begin{abstract*}
+This report documents the practical part of a seminar in AI centered on
+\emph{Optimal Deep Learning of Holomorphic Operators Between Banach
+Spaces} by Adcock, Dexter and Moraga~\cite{adcock2024holomorphic}
+(arXiv:2406.13928). We reproduce two of the paper's three numerical
+experiments -- the parametric elliptic diffusion equation (a
+Hilbert-valued operator) and the Navier--Stokes--Brinkman equations (a
+Banach-valued operator) -- end to end, rather than with a simplified
+proxy: mixed finite element data generation in FEniCS matching the
+paper's variational formulations, deterministic Clenshaw--Curtis
+sparse-grid test-error evaluation, and the paper's stated training
+protocol (architecture family, initialization, optimizer, and
+checkpoint/restore rule). We implement and train both experiments in
+PyTorch and JAX on identical data, giving a controlled comparison of the
+two frameworks in addition to the comparison against the original
+paper's reported results. Every point at which our implementation
+necessarily deviates from an underspecified or ambiguous detail in the
+paper -- for example the exact finite element family used for the
+Navier--Stokes--Brinkman system, which is not stated in the paper itself
+-- is documented explicitly.
+\end{abstract*}
+
+%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 
+%% Abstract of your thesis in an additional language
+%% 
+
+\cleardoubleoddpage%  Make sure to start abstract on a new odd page
+\begin{otherlanguage}{ngerman}
+\begin{abstract*}
+Dieser Bericht dokumentiert den praktischen Teil eines KI-Seminars zum
+Thema \emph{Optimal Deep Learning of Holomorphic Operators Between Banach
+Spaces} von Adcock, Dexter und Moraga~\cite{adcock2024holomorphic}
+(arXiv:2406.13928). Wir reproduzieren zwei der drei numerischen
+Experimente des Papers -- die parametrische elliptische
+Diffusionsgleichung (ein Hilbert-wertiger Operator) und die
+Navier--Stokes--Brinkman-Gleichungen (ein Banach-wertiger Operator) --
+vollständig und nicht anhand einer vereinfachten Approximation: Die
+Trainingsdaten werden mittels gemischter Finite-Elemente-Methoden in
+FEniCS gemäß den Variationsformulierungen des Papers erzeugt, der
+Testfehler wird über eine deterministische Clenshaw--Curtis-Dünngitter-Quadratur
+ausgewertet, und das im Paper beschriebene Trainingsprotokoll
+(Architekturfamilie, Initialisierung, Optimierer und
+Checkpoint/Restore-Regel) wird eingehalten. Beide Experimente werden
+sowohl in PyTorch als auch in JAX auf identischen Daten trainiert, was
+einen kontrollierten Vergleich der beiden Frameworks zusätzlich zum
+Vergleich mit den ursprünglich berichteten Ergebnissen ermöglicht. Jede
+Stelle, an der unsere Implementierung notwendigerweise von einem im
+Paper nicht eindeutig spezifizierten Detail abweicht -- etwa die genaue
+Finite-Elemente-Familie für das Navier--Stokes--Brinkman-System, die im
+Originalpaper nicht angegeben ist -- wird explizit dokumentiert.
+\end{abstract*}
+\end{otherlanguage}
+
+%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

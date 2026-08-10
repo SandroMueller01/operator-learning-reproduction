@@ -1,0 +1,19 @@
+# Fast debug training config for JAX smoke tests. Not paper-accurate (few
+# epochs, no LR decay). See configs/train/jax_paper.yaml for the full
+# paper-spec training config.
+training:
+  framework: jax
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+  scheduler:
+    name: none
+  batch_size: full
+  epochs: 200
+  loss:
+    name: mse
+  dtype: float32
+
+logging:
+  log_every: 50

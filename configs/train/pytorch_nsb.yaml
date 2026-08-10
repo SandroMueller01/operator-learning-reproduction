@@ -1,0 +1,43 @@
+# NSB-specific training config -- a documented deviation from the paper's
+# stated protocol (pytorch_paper.yaml: 60,000 epochs / 5e-7 absolute loss
+# tolerance), used only for the Navier-Stokes-Brinkman experiment.
+#
+# Rationale: real per-task timing on this machine showed NSB tasks commonly
+# needing tens of thousands of epochs to approach 5e-7 absolute loss (a
+# direct log trace showed one task still at 6.5e-6 after 11,000 epochs,
+# decreasing steadily but slowly under the exponential-decay LR schedule),
+# versus diffusion tasks which mostly converge well under 30,000 epochs.
+# At the paper's full 60,000-epoch cap, the full NSB paper matrix (16,128
+# runs) was measured at roughly 9 days of wall-clock time even at 16-way
+# parallelism -- not tractable for this practical work.
+#
+# This config keeps everything else identical to the paper's protocol
+# (optimizer, LR schedule, checkpoint/restore rule, batch size) and only
+# reduces the epoch cap (60,000 -> 20,000) and loosens the absolute loss
+# tolerance (5e-7 -> 5e-6, one order of magnitude). Diffusion continues to
+# use the full pytorch_paper.yaml protocol unchanged, since it does not
+# need this relaxation. See practical_work_report/91-appendix.tex for the
+# full deviation writeup.
+training:
+  framework: pytorch
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+  scheduler:
+    name: exponential_decay
+    decay_rate: 0.9999
+  batch_size: full
+  epochs: 20000
+  loss_tolerance: 5.0e-6
+  early_stopping:
+    enabled: false
+    patience: 0
+    min_delta: 0.0
+  loss:
+    name: mse
+  device: cpu
+  dtype: float32
+
+logging:
+  log_every: 1000

@@ -1,0 +1,129 @@
+# GENERATED ARTIFACT - do not hand-edit.
+# Materialized from configs\diffusion.yaml, case 'log_d8', by scripts/materialize_pde_configs.py.
+# Regenerate after changing the grouped config: python scripts/materialize_pde_configs.py
+
+experiment:
+  name: diffusion_log_d8
+  group_name: diffusion
+  problem: diffusion
+  equation: elliptic_diffusion
+  coefficient: log
+  dimension: 8
+  targets:
+  - u
+  case: log_d8
+pde:
+  domain:
+    type: unit_square
+    spatial_dimension: 2
+    x_min: 0.0
+    x_max: 1.0
+    y_min: 0.0
+    y_max: 1.0
+  forcing: 10.0
+  boundary_conditions:
+    type: dirichlet
+    bottom: 0.5
+    top: 0.0
+    left: 0.0
+    right: 0.0
+coefficient:
+  name: log
+  paper_symbol: a2
+  parameter_domain:
+  - -1.0
+  - 1.0
+  beta_c: 0.125
+  beta_p: 1.0
+  beta: 0.125
+  spatial_coordinate: z1
+  formula: exp(1 + x_1 * (sqrt(pi * beta) / 2)^(1/2) + sum_{j=2}^d zeta_j theta_j(z)
+    x_j)
+discretization:
+  paper:
+    method: fenics_mixed_fem
+    library: fenics
+    fenics_version: 2019.1.0
+    degrees_of_freedom:
+      total: 2622
+    mesh:
+      type: regular_triangulation
+      h_min: 0.0844
+      h_max: 0.1146
+  implementation:
+    method: finite_difference
+    grid:
+      nx: 16
+      ny: 16
+      include_boundary: true
+data:
+  train_sizes:
+  - 10
+  - 20
+  - 30
+  - 40
+  - 50
+  - 60
+  - 70
+  - 80
+  - 90
+  - 100
+  - 200
+  - 300
+  - 400
+  - 500
+  seeds:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  dtype: float32
+  sampling:
+    distribution: uniform
+    lower: -1.0
+    upper: 1.0
+testing:
+  paper:
+    method: clenshaw_curtis_sparse_grid
+    toolkit: tasmanian
+    level: null
+    m_test: null
+    weighted_error: true
+  implementation:
+    method: random_uniform_test_set
+    test_size: 200
+    seed_offset: 10000
+evaluation:
+  metric: relative_l2
+  aggregation:
+    mean: geometric
+    spread: geometric_std
+paths:
+  data_dir: data/processed/diffusion_log_d8
+  results_dir: results/diffusion_log_d8
+reproduction:
+  status: simplified_until_fenics_and_sparse_grid_are_implemented
+  aligned_with_paper:
+  - pde_equation
+  - domain
+  - forcing
+  - boundary_conditions
+  - affine_coefficient_formula
+  - log_coefficient_formula
+  - dimensions_d4_d8
+  - training_sizes
+  - number_of_trials
+  - target_variable_u
+  - model_config_references
+  not_exact_yet:
+  - finite_difference_solver_if_used
+  - random_test_set_if_used
+  - sparse_grid_level_not_yet_verified

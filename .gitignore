@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Generated data (large, regenerable via scripts/wsl/)
+data/
+
+# Results: keep metrics/figures/tables (the actual evidence referenced from
+# README.md / RESULTS.md), ignore run logs (large, not needed to review results)
+results/logs/
+results/checkpoints/
+
+# LaTeX build artifacts (practical_work_report/*.tex sources + the
+# compiled main-thesis.pdf are kept; everything biber/xelatex regenerates
+# is not)
+practical_work_report/*.aux
+practical_work_report/*.bbl
+practical_work_report/*.bcf
+practical_work_report/*.blg
+practical_work_report/*.log
+practical_work_report/*.out
+practical_work_report/*.run.xml
+practical_work_report/*.toc
+practical_work_report/*.fls
+practical_work_report/*.fdb_latexmk
+practical_work_report/*.synctex.gz
+
+# IDE
+.idea/
+
+# Local reference copies / archives, not part of the reproducible repo
+*.zip
+2406.13928*.pdf
+
+# OS
+.DS_Store
+Thumbs.db

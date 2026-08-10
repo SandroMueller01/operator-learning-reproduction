@@ -1,0 +1,333 @@
+# Experiment group config for the parametric Navier-Stokes-Brinkman benchmark.
+#
+# This file contains all NSB variants used in the paper-style experiment:
+#   - affine coefficient with d = 4
+#   - affine coefficient with d = 8
+#   - log-transformed coefficient with d = 4
+#   - log-transformed coefficient with d = 8
+#
+# The selected case is chosen from the command line, for example:
+#
+#   python scripts/generate_data.py --config configs/experiments/navier_stokes_brinkman.yaml --case log_d4
+#
+# Paper alignment:
+# The PDE parameters, coefficient families, dimensions, train sizes, and targets
+# follow the paper. Exact reproduction requires the mixed FEM/FEniCS formulation
+# from the paper.
+
+experiment:
+  # Human-readable group name for this PDE family.
+  group_name: navier_stokes_brinkman
+
+  # Problem key used by the code registry.
+  problem: navier_stokes_brinkman
+
+  # PDE equation identifier used for validation and dispatch.
+  equation: navier_stokes_brinkman
+
+  # The paper reports approximation errors for both velocity u and pressure p.
+  default_targets: [u, p]
+
+
+pde:
+  # Physical domain used in the paper:
+  #   Omega = (0, 1)^2
+  domain:
+    type: unit_square
+    spatial_dimension: 2
+    x_min: 0.0
+    x_max: 1.0
+    y_min: 0.0
+    y_max: 1.0
+
+  # Paper PDE:
+  #
+  #   eta u - lambda div(a(x) e(u(x)))
+  #   + (u(x) · grad) u(x) + grad p(x) = f
+  #
+  #   div(u(x)) = 0
+  #
+  # where:
+  #   lambda = Re^(-1)
+  #   lambda = 0.1 in the experiments
+  lambda: 0.1
+
+  # Scaled inverse permeability:
+  #   eta(z) = 10 + z_1^2 + z_2^2
+  inverse_permeability:
+    type: spatial_formula
+    formula: "10 + z_1^2 + z_2^2"
+
+  # External force:
+  #   f = (0, -1)^T
+  forcing:
+    type: constant_vector
+    value: [0.0, -1.0]
+
+  # Symmetric gradient:
+  #   e(u) = 0.5 * (grad u + grad u^T)
+  strain:
+    type: symmetric_gradient
+
+  # Pressure normalization:
+  #   integral_Omega p = 0
+  pressure_normalization:
+    type: zero_mean
+    formula: "integral_Omega p = 0"
+
+  # Boundary decomposition from the paper:
+  #
+  #   inlet:  (0, 1) x {1}
+  #   outlet: {1} x (0, 1)
+  #   walls:  {0} x (0, 1) union (0, 1) x {0}
+  boundaries:
+    inlet:
+      location: "top"
+      set: "(0, 1) x {1}"
+
+    outlet:
+      location: "right"
+      set: "{1} x (0, 1)"
+
+    walls:
+      locations: ["left", "bottom"]
+      set: "{0} x (0, 1) union (0, 1) x {0}"
+
+  boundary_conditions:
+    # Inlet Dirichlet condition from the paper:
+    #
+    #   u_D = (0.0625)^(-1) * ((z_2 - 0.5) * (1 - z_2), 0)
+    #
+    # Note:
+    # The paper writes this on the inlet boundary. Since the inlet is the top
+    # boundary in the paper text, verify the coordinate convention carefully
+    # when implementing this in code.
+    inlet:
+      type: dirichlet
+      formula: "(0.0625)^(-1) * ((z_2 - 0.5) * (1 - z_2), 0.0)"
+
+    # No-slip condition on the walls:
+    #   u = 0
+    walls:
+      type: no_slip
+      value: [0.0, 0.0]
+
+    # Outlet condition:
+    #   zero normal Cauchy stress
+    outlet:
+      type: zero_normal_cauchy_stress
+
+
+coefficients:
+  # Paper coefficient a_1 from equation (B.1), used as random viscosity.
+  #
+  # Formula:
+  #   a_1(z, x) = 2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)
+  #
+  # The finite-dimensional experiment truncates this expansion after d terms.
+  affine:
+    name: affine
+    paper_symbol: a1
+    role: random_viscosity
+    base_value: 2.62
+    parameter_domain: [-1.0, 1.0]
+    decay_power: 1.5
+    spatial_coordinate: z1
+    formula: "2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)"
+
+  # Paper coefficient a_2 from equation (B.2), used as random viscosity.
+  #
+  # Important:
+  # This is the paper's actual log-transformed coefficient, not simply the
+  # exponential of the affine a_1 expansion.
+  log:
+    name: log
+    paper_symbol: a2
+    role: random_viscosity
+    parameter_domain: [-1.0, 1.0]
+    beta_c: 0.125
+    beta_p: 1.0
+    beta: 0.125
+    spatial_coordinate: z1
+    formula: "exp(1 + x_1 * (sqrt(pi * beta) / 2)^(1/2) + sum_{j=2}^d zeta_j theta_j(z) x_j)"
+
+
+discretization:
+  # Paper target discretization.
+  #
+  # The paper uses a mixed FEM formulation in FEniCS.
+  # It reports 1464 degrees of freedom for velocity u and 244 for pressure p.
+  paper:
+    method: fenics_mixed_fem
+    library: fenics
+    fenics_version: "2019.1.0"
+    formulation: mixed_variational
+    degrees_of_freedom:
+      velocity_u: 1464
+      pressure_p: 244
+    mesh:
+      # The paper says it uses the same mesh as the diffusion example.
+      same_as: diffusion
+      type: regular_triangulation
+      h_min: 0.0844
+      h_max: 0.1146
+
+    # The paper uses a Nitsche method for the Neumann/outlet condition,
+    # with kappa much larger than 1, e.g. kappa = 1e4.
+    outlet_condition:
+      method: nitsche
+      kappa: 10000.0
+
+  # Current/simple implementation target.
+  #
+  # Keep this block if your current code still uses the simplified
+  # finite-difference NSB solver. For exact reproduction, this should eventually
+  # be replaced by the mixed FEM/FEniCS formulation described above.
+  implementation:
+    method: finite_difference
+    grid:
+      nx: 16
+      ny: 16
+      include_boundary: true
+
+
+data:
+  # Paper training sizes.
+  train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
+
+  # The paper runs 12 trials for the diffusion and NSB experiments.
+  # Using 0..11 is a practical deterministic representation of those trials.
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+  # The paper trains in single precision.
+  dtype: float32
+
+  # Training samples are iid from the uniform distribution on [-1, 1]^d.
+  sampling:
+    distribution: uniform
+    lower: -1.0
+    upper: 1.0
+
+
+testing:
+  # Paper testing protocol.
+  #
+  # The paper uses deterministic high-order Clenshaw-Curtis sparse-grid
+  # quadrature generated with the TASMANIAN sparse-grid toolkit.
+  #
+  # I did not find the exact sparse-grid level or m_test value in the paper
+  # text checked, so these are left as null until verified.
+  paper:
+    method: clenshaw_curtis_sparse_grid
+    toolkit: tasmanian
+    level: null
+    m_test: null
+    weighted_error: true
+
+  # Current/simple implementation fallback.
+  #
+  # Keep this only while the sparse-grid testing protocol is not implemented.
+  implementation:
+    method: random_uniform_test_set
+    test_size: 200
+    seed_offset: 10000
+
+
+model:
+  # Default architecture config. This can be overridden from the command line.
+  #
+  # The paper evaluates 4x40 and 10x100 networks with ReLU, tanh, and ELU.
+  default_config: configs/model/mlp_4x40_elu.yaml
+
+
+training:
+  # Default training config. This can be overridden from the command line.
+  #
+  # For paper-level alignment, this training config should use Adam,
+  # exponentially decaying learning rate, He/Kaiming uniform initialization,
+  # and 60,000 epochs.
+  default_config: configs/train/pytorch_default.yaml
+
+
+evaluation:
+  # Paper reports relative L2_mu error.
+  #
+  # For NSB, the paper discusses velocity u and pressure p as separate physical
+  # quantities, so the pipeline should support evaluating each target separately.
+  metric: relative_l2
+
+  evaluate_targets_separately: true
+
+  # The paper reports geometric mean and geometric standard deviation across trials.
+  aggregation:
+    mean: geometric
+    spread: geometric_std
+
+
+cases:
+  affine_d4:
+    # Paper case: NSB with affine viscosity coefficient a_1,d and d = 4.
+    name: nsb_affine_d4
+    coefficient: affine
+    dimension: 4
+    targets: [u, p]
+    paths:
+      data_dir: data/processed/nsb_affine_d4
+      results_dir: results/nsb_affine_d4
+
+  affine_d8:
+    # Paper case: NSB with affine viscosity coefficient a_1,d and d = 8.
+    name: nsb_affine_d8
+    coefficient: affine
+    dimension: 8
+    targets: [u, p]
+    paths:
+      data_dir: data/processed/nsb_affine_d8
+      results_dir: results/nsb_affine_d8
+
+  log_d4:
+    # Paper case: NSB with log-transformed viscosity coefficient a_2,d and d = 4.
+    name: nsb_log_d4
+    coefficient: log
+    dimension: 4
+    targets: [u, p]
+    paths:
+      data_dir: data/processed/nsb_log_d4
+      results_dir: results/nsb_log_d4
+
+  log_d8:
+    # Paper case: NSB with log-transformed viscosity coefficient a_2,d and d = 8.
+    name: nsb_log_d8
+    coefficient: log
+    dimension: 8
+    targets: [u, p]
+    paths:
+      data_dir: data/processed/nsb_log_d8
+      results_dir: results/nsb_log_d8
+
+
+reproduction:
+  # This status should be updated to "exact" only when the mixed FEM/FEniCS NSB
+  # solver and sparse-grid testing protocol are implemented.
+  status: simplified_until_fenics_and_sparse_grid_are_implemented
+
+  aligned_with_paper:
+    - pde_equation
+    - domain
+    - lambda
+    - inverse_permeability
+    - forcing
+    - inlet_outlet_wall_boundary_decomposition
+    - affine_coefficient_formula
+    - log_coefficient_formula
+    - dimensions_d4_d8
+    - training_sizes
+    - number_of_trials
+    - target_variables_u_and_p
+    - model_config_references
+
+  not_exact_yet:
+    - finite_difference_solver_if_used
+    - simplified_boundary_handling_if_used
+    - random_test_set_if_used
+    - sparse_grid_level_not_yet_verified

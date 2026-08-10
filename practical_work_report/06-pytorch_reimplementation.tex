@@ -1,0 +1,90 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{PyTorch Reimplementation}
+\label{sec:pytorchreimplementation}
+
+\section{Design of the PyTorch Version}
+
+The PyTorch implementation \cite{paszke2019pytorch} is organized around
+three components: a plain \texttt{torch.nn.Module} multilayer perceptron
+mapping a parameter vector
+$x \in [-1,1]^d$ to a flat vector of finite element degrees of freedom
+(Section~\ref{sec:methodology}), a training loop implementing the paper's
+optimizer, learning-rate schedule, and checkpoint/restore rule, and a
+sweep driver that iterates over the eight PDE cases, six architectures,
+fourteen training-set sizes, and twelve trials, writing one metrics row
+per run so that a sweep can be resumed after an interruption without
+recomputing already-completed runs. Training and test data are read
+directly from the \texttt{.npz} files and mass-matrix sidecars produced by
+the FEniCS/sparse-grid data generation pipeline (Section~\ref{sec:methodology});
+the PyTorch process itself never depends on FEniCS or Tasmanian, keeping
+the legacy-library constraints confined to the WSL2 data-generation
+environment.
+
+\section{Key Implementation Decisions}
+
+Two implementation choices required deviating from PyTorch's defaults to
+match the paper's stated training protocol rather than a generic one.
+First, weight initialization: PyTorch's built-in Kaiming initialization
+selects its gain based on the target activation function, whereas Keras'
+\texttt{HeUniform} initializer -- the initializer implicitly used by the
+paper's TensorFlow/Keras reference implementation -- always uses the
+ReLU-derived gain, regardless of the network's actual activation. The
+PyTorch implementation therefore fixes the nonlinearity argument passed to
+Kaiming initialization to \texttt{"relu"} uniformly across all three
+activation functions used in the architecture sweep (ReLU, ELU, tanh), so
+that the initial weight distribution matches the paper's rather than
+PyTorch's own convention. Second, per-trial seeding: each of the twelve
+trials per case must be reproducible individually and distinct from the
+other eleven, so a \texttt{trial\_seed} argument is threaded through the
+sweep driver into both the training-subsample draw and
+\texttt{torch.manual\_seed} before weight initialization, rather than
+seeding the whole sweep once at startup.
+
+The paper's checkpoint/restore rule (Section~\ref{sec:methodology}) is
+implemented as an explicit two-trigger condition evaluated once per epoch:
+the current \texttt{state\_dict} is deep-copied into a checkpoint buffer
+whenever the loss achieves a new best value \emph{or} the ratio between the
+current loss and the loss at the last checkpoint drops below $1/8$: after
+the epoch loop terminates (either by reaching the epoch cap or by falling
+below the loss tolerance), the checkpointed weights are loaded back into
+the model if the final-epoch loss is worse than the checkpoint's loss.
+
+\section{Deviations from the Original}
+
+Beyond the deep-learning framework substitution shared with the JAX
+implementation (Chapter~\ref{sec:jaximplementation}), a small number of
+deviations are specific to how the PyTorch implementation interacts with
+the FEniCS-generated data and are documented in detail in
+Appendix~\ref{app:an-appendix}: the diffusion mesh is a structured mesh
+rather than the unstructured mesh the paper's figures suggest, because the
+unstructured mesh generator \texttt{mshr} is not usable in the installed
+FEniCS environment; the NSB inlet velocity profile substitutes a
+coordinate reflection of the paper's printed formula, which is otherwise
+degenerate at the inlet boundary; and the NSB pressure field, which the
+paper's formulation only determines up to an additive constant via a
+Lagrange multiplier, is instead fixed by a post-hoc mean-shift enforcing
+$\int_\Omega p = 0$ exactly. None of these deviations depend on the choice
+of deep learning framework -- they occur upstream, in data generation --
+so they apply identically to the JAX implementation's training data.
+
+\section{Verification of Correctness}
+
+The PyTorch implementation served as the first target for verifying the
+full pipeline end to end, since it is easier to step through and debug
+than a JIT-compiled JAX equivalent. Verification proceeded in stages:
+unit tests check the initialization-distribution bounds
+($\sqrt{6/\text{fan\_in}}$ across all three activations), the
+checkpoint/restore rule's two triggers individually and jointly on
+synthetic non-monotonic loss curves, and per-trial seed determinism and
+distinctness. At the PDE level, single finite element solves were compared
+visually against the paper's own figures (the diffusion solution profile
+against Fig.~5, the NSB circulation pattern against Fig.~6) before any
+dataset-scale generation was run, to catch a wrong element family or
+boundary condition as early and cheaply as possible. The resulting PyTorch
+metrics also serve as the correctness reference against which the JAX
+implementation's numerical agreement is assessed
+(Section~\ref{sec:jaximplementation}).
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

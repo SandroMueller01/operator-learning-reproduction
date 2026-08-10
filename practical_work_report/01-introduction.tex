@@ -1,0 +1,40 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{Introduction}
+\label{sec:introduction}
+
+Partial differential equations (PDEs) are central tools in scientific computing, where they are used to model physical systems such as diffusion, fluid flow, heat transport, and wave propagation. In many applications, a PDE has to be solved repeatedly for different input parameters, coefficient fields, source terms, initial conditions, or boundary conditions. This repeated-solve setting can be computationally expensive when classical numerical methods, such as finite element or finite difference methods, are used directly.
+
+Operator learning addresses this problem by constructing surrogate models for PDE solution maps. Instead of solving the PDE from scratch for every new input, one trains a model that approximates the map from input data to the corresponding solution field. Neural-network-based operator learning is therefore a promising approach for accelerating parametric PDE simulations, especially in settings where many evaluations of the solution operator are required.
+
+This project is based on the paper \emph{Optimal Deep Learning of Holomorphic Operators Between Banach Spaces} by Adcock, Dexter and Moraga
+\cite{adcock2024holomorphic}. The paper studies deep learning methods for
+holomorphic operators between Banach spaces and provides near-optimal
+generalization guarantees for such operators. It is particularly relevant because it connects abstract operator learning theory with numerical experiments on parametric PDEs.
+
+The aim of this project is to reproduce two of the paper's three numerical
+experiments -- the parametric elliptic diffusion equation and the
+Navier--Stokes--Brinkman (NSB) equations -- as faithfully as the available
+time and hardware permit, rather than with a simplified proxy. Concretely,
+this means implementing the paper's actual mixed finite element data
+generation (in FEniCS), its deterministic sparse-grid test-error protocol,
+and its stated training procedure, instead of substituting a
+finite-difference solver or an i.i.d.\ random test set. The diffusion
+experiment is Hilbert-valued (the solution is measured in an
+$L^2(\Omega)$-type norm), while the NSB experiment is Banach-valued (its
+mixed formulation produces a velocity field in $\mathbf{L}^4(\Omega)$),
+so together the two reproduced experiments span both regimes the paper's
+theory addresses. The corresponding parameter-to-solution maps are
+learned using fully connected neural networks implemented in both PyTorch
+and JAX. The reproduction investigates how the test error depends on the
+number of training samples, the parametric dimension, the activation
+function, and the implementation framework, and additionally compares the
+two frameworks against each other directly.
+
+The remainder of this report is structured as follows.
+Section~\ref{sec:background} introduces the relevant background on operator learning, Banach and Hilbert spaces, and the main contributions of the target paper. Section~\ref{sec:problemStatement} states the concrete objectives of this practical work, and Section~\ref{sec:theoreticalSummary} summarizes the parts of the paper's theory most relevant to the reproduction. Section~\ref{sec:methodology} describes the parametric PDE problems, their mixed finite element formulations, and the learning formulation. Sections~\ref{sec:pytorchreimplementation} and~\ref{sec:jaximplementation} present the PyTorch and JAX implementations, respectively, including the framework comparison. Section~\ref{sec:experimentalresults} reports the numerical
+results. Finally, Section~\ref{sec:conclusion} summarizes the findings and
+discusses limitations of the reproduction.
+%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

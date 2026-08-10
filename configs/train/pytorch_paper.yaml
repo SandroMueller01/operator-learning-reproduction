@@ -1,0 +1,36 @@
+# Full paper-spec PyTorch training config (Appendix A.2(iv)):
+# Adam, exponentially-decaying learning rate, up to 60,000 epochs or until
+# the loss reaches 5e-7, single precision. Checkpoint/restore
+# (save-on-best-or-ratio<1/8, restore-if-worse) and the loss-tolerance stop
+# are implemented unconditionally in the training loop itself (see
+# ol_reproduction.training.pytorch_train._run_training_loop) -- this file
+# only needs to supply loss_tolerance/epochs, not toggle that behavior.
+#
+# The paper does not state its exact LR decay rate; decay_rate=0.9999 is an
+# empirical choice (~400x total LR reduction over 60,000 epochs), not a
+# value transcribed from the paper -- see
+# practical_work_report/91-appendix.tex for the full list of such
+# documented deviations.
+training:
+  framework: pytorch
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+  scheduler:
+    name: exponential_decay
+    decay_rate: 0.9999
+  batch_size: full
+  epochs: 60000
+  loss_tolerance: 5.0e-7
+  early_stopping:
+    enabled: false
+    patience: 0
+    min_delta: 0.0
+  loss:
+    name: mse
+  device: auto
+  dtype: float32
+
+logging:
+  log_every: 1000

@@ -1,0 +1,76 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{Problem Statement and Objectives of this Practical Work}
+\label{sec:problemStatement}
+The target paper provides both theoretical guarantees and numerical experiments for deep learning of holomorphic operators between Banach spaces. The practical part of this report reproduces two of the paper's three numerical experiments as faithfully as the available time and hardware permit, using the paper's own data-generation pipeline rather than a simplified proxy, and implements the resulting learning problem in two modern machine learning frameworks.
+
+The selected reproduction problems are the parametric elliptic diffusion equation and the Navier--Stokes--Brinkman (NSB) equations. The diffusion equation is the simplest numerical example considered in the target paper and gives a Hilbert-valued operator, while the NSB equations are solved through a mixed finite element formulation whose primary unknown is Banach-valued; together they cover both regimes addressed by the paper's theory (Section~\ref{sec:background}). The stationary Boussinesq equation, the paper's third experiment, is out of scope for this practical work. The main task is to generate parameter-dependent PDE data using the paper's stated finite element discretizations and sparse-grid test protocol, train neural network surrogates following the paper's training procedure, and compare the observed learning behaviour with the qualitative results reported in the paper.
+
+\section{Reproduction Objective}
+The first objective is to reproduce the general structure of the numerical
+experiments from the target paper. In the original work, the authors sample parameter vectors, solve a corresponding parametric PDE, train fully connected neural networks on the resulting input-output pairs, and evaluate the relative test error as the number of training samples increases.
+
+In this project, the same workflow is followed for the diffusion and NSB
+problems, using the paper's own finite element discretizations rather than
+a simplified stand-in. Given a parameter vector
+\[
+    x \in [-1,1]^d,
+\]
+a mixed finite element solver (implemented in FEniCS, following the
+variational formulations stated in the paper's appendix) is used to compute
+the corresponding discretized solution
+\[
+    u(x).
+\]
+The resulting training dataset consists of pairs
+\[
+    \{(x_i,u(x_i))\}_{i=1}^{m}
+\]
+sampled from the paper's stated distribution, while the test dataset is
+evaluated on a fixed, deterministic Clenshaw--Curtis sparse-grid point set,
+exactly as in the paper, rather than an independently drawn random sample.
+A neural network is then trained to approximate the parameter-to-solution map
+\[
+    x \mapsto u(x).
+\]
+
+The main reproduction objective is to investigate whether the learned surrogate shows the same qualitative behaviour as reported in the paper. In particular, the experiments aim to study how the relative test error changes as the number of training samples $m$ increases, across both parametric dimensions ($d=4$ and $d=8$), both coefficient families (affine and log-transformed), and the paper's six architecture/activation combinations. A central comparison point is whether the error decay resembles the behaviour observed in the paper for the diffusion and NSB examples, including the reported $O(m^{-1})$-type decay rate and the relative ranking of activation functions.
+
+The reproduction follows the paper's finite element discretization and
+experimental setup -- the same PDEs, the same sparse-grid test protocol, the
+same architectures, and the same number of random trials per configuration
+-- run at the paper's full experimental matrix. The one deliberate
+substitution, predating this practical work and kept as a project
+constraint, is the deep learning framework: the paper's TensorFlow/Keras
+reference implementation is replaced by PyTorch and JAX implementations,
+compared against each other and against the paper's reported results. Every
+point at which the paper's description is itself ambiguous or
+underspecified (for instance the exact finite element family used for the
+NSB system) is resolved through calibration against the numbers and figures
+the paper does report, and is documented explicitly rather than left
+implicit (Appendix~\ref{app:an-appendix}).
+
+\section{PyTorch Reimplementation Objective}
+The second objective is to implement the learning pipeline in PyTorch. PyTorch is used as the main reference implementation because it provides a flexible and widely used interface for defining neural network architectures, training loops, loss functions, and optimization procedures.
+
+The PyTorch implementation has several concrete goals. First, it should implement a fully connected neural network that maps parameter vectors
+$x \in [-1,1]^d$ to discretized PDE solutions. Second, it should reproduce the basic training procedure used in the paper, namely empirical risk minimization with a mean squared error loss. Third, it should compute the relative test error used to evaluate the quality of the learned operator surrogate.
+
+The PyTorch implementation also serves as a correctness reference for the JAX implementation. Since PyTorch is relatively straightforward to debug, it is used to verify the data generation procedure, model architecture, training loop, and evaluation metric before comparing against the JAX version.
+
+The expected output of this part is a working PyTorch training pipeline that can be run for different values of the training set size $m$, the parametric dimension $d$, and the activation function. The resulting test errors provide the baseline for the reproduction study.
+
+\section{JAX Reimplementation and Efficiency Objective}
+The third objective is to implement the same learning problem in JAX and compare it with the PyTorch version. JAX is particularly relevant for scientific machine learning because it provides automatic differentiation, just-in-time compilation, and efficient vectorized computation. These features can be useful when training surrogate models for parametrised PDE problems.
+
+The JAX implementation should match the PyTorch implementation as closely as possible. In particular, it should use the same dataset, the same model
+architecture, the same loss function, and the same evaluation metric. This makes it possible to compare the two frameworks in a controlled way.
+
+The efficiency objective is to investigate whether JAX provides practical
+advantages for this problem. The comparison may include metrics such as training time, evaluation time, memory usage, implementation complexity, and numerical agreement with the PyTorch results. The aim is not only to compare final test errors, but also to assess the trade-offs between the two frameworks.
+
+This objective is secondary to the reproduction objective. Therefore, correctness and comparability are prioritized over aggressive performance optimization. The JAX implementation is considered successful if it produces results consistent with the PyTorch implementation and allows a meaningful discussion of efficiency and implementation trade-offs.
+
+%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

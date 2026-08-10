@@ -1,0 +1,121 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{Background}
+\label{sec:background}
+
+\section{Operator Learning}
+
+Operator learning studies the approximation of mappings between function spaces. In the setting of PDEs, the object of interest is often a solution operator
+\[
+    F : \mathcal{X} \to \mathcal{Y},
+    \qquad X \mapsto F(X),
+\]
+where $\mathcal{X}$ denotes an input space and $\mathcal{Y}$ denotes an output or solution space. The input $X$ may represent a coefficient field, forcing term, initial condition, boundary condition, or another parameter-dependent quantity, while $F(X)$ denotes the corresponding PDE solution.
+
+The idea of approximating non-linear operators with neural networks goes back at least to the universal approximation theorem for operators by Chen and Chen \cite{chen1995universal}. More recent neural operator methods include DeepONet \cite{lu2021deeponet}, the Fourier Neural Operator \cite{li2021fno}, and the general neural operator framework of Kovachki et al. \cite{kovachki2023neuraloperator}. These methods differ in architecture, but share the goal of learning mappings between function spaces rather than only finite-dimensional vector-valued functions.
+
+In the target paper, the learned operator is represented in an
+encoder--network--decoder form,
+\[
+    \widehat{F}
+    =
+    D_{\mathcal{Y}} \circ \widehat{N} \circ E_{\mathcal{X}},
+\]
+where
+\[
+    E_{\mathcal{X}} : \mathcal{X} \to \mathbb{R}^{d_{\mathcal{X}}},
+    \qquad
+    \widehat{N} : \mathbb{R}^{d_{\mathcal{X}}}
+    \to \mathbb{R}^{d_{\mathcal{Y}}},
+    \qquad
+    D_{\mathcal{Y}} : \mathbb{R}^{d_{\mathcal{Y}}} \to \mathcal{Y}.
+\]
+Here, $E_{\mathcal{X}}$ maps the input object into a finite-dimensional
+representation, $\widehat{N}$ learns the finite-dimensional mapping, and
+$D_{\mathcal{Y}}$ reconstructs an approximation in the output space
+\cite{adcock2024holomorphic}.
+
+The training data are assumed to have the form
+\[
+    \{(X_i, F(X_i) + E_i)\}_{i=1}^{m},
+\]
+where $X_i$ are sampled from a probability measure $\mu$ on the input space and $E_i$ represents noise or numerical error. The learning objective is to obtain an operator approximation that generalizes well from a finite number of samples.
+This is particularly important for PDE applications, where generating each
+training sample may require an expensive numerical solve.
+
+For the practical reproduction in this project, the infinite-dimensional problem is reduced to a finite-dimensional supervised learning problem. A parameter vector
+\[
+    x \in [-1,1]^d
+\]
+is sampled, a numerical PDE solver generates the corresponding solution $u(x)$, and a neural network is trained to approximate the parameter-to-solution map
+\[
+    x \mapsto u(x).
+\]
+Thus, the implementation focuses on the finite-dimensional surrogate learning problem induced by the original operator learning formulation.
+
+\section{Banach vs. Hilbert Setting}
+
+A key distinction in the target paper is the difference between Hilbert-valued and Banach-valued operator learning. A Hilbert space is a complete inner-product space. Its norm is induced by an inner product, which provides geometric tools such as orthogonality, projections, Parseval identities, and spectral decompositions. The space $L^2(\Omega)$ is the standard example of a Hilbert space in PDE analysis.
+
+A Banach space is a complete normed vector space, but it does not necessarily have an inner product. Every Hilbert space is a Banach space, but not every Banach space is Hilbert. For example, $L^p(\Omega)$ is a Banach space for $1 \leq p \leq \infty$, but it is Hilbert only when $p=2$. This distinction is important because many analytical tools available in Hilbert spaces are no longer available in general Banach spaces.
+
+Much of the theoretical work on operator learning is formulated in Hilbert-space settings, which is natural for PDEs whose solutions are measured in $L^2$-based norms. However, more general PDE formulations, including mixed formulations and non-linear systems, may naturally involve Banach spaces such as $L^4(\Omega)$ or spaces involving $L^q$ divergence conditions. The target paper therefore studies operators whose outputs may lie in general Banach spaces \cite{adcock2024holomorphic}.
+
+This broader setting creates additional analytical difficulties. In the Hilbert case, errors can often be controlled using the standard Bochner
+$L^2_\mu(\mathcal{X};\mathcal{Y})$ norm. In the Banach case, the paper also uses the Pettis norm, which measures the operator error after testing against bounded linear functionals from the dual space $\mathcal{Y}^\ast$. This is weaker than the Bochner norm in general, but it is more suitable for Banach-valued analysis.
+
+The theoretical bounds in the paper are weaker in the Banach case than in the Hilbert case. This difference is partly due to the lack of an inner-product structure and the absence of Hilbert-space tools such as Parseval's identity.
+However, the numerical experiments suggest that this theoretical gap may partly come from the proof technique rather than from a fundamental limitation of deep learning methods.
+
+This project reproduces two of the paper's numerical experiments, chosen
+specifically because they instantiate both settings described above. The
+parametric elliptic diffusion equation is the simplest example in the target
+paper and corresponds to a Hilbert-valued output setting, since the solution
+is measured in an $L^2(\Omega)$-type space. The Navier--Stokes--Brinkman
+equations, in contrast, are solved through the mixed formulation of
+Gatica, N\'{u}\~{n}ez and Ruiz-Baier, whose primary unknown velocity field
+lies in $\mathbf{L}^4(\Omega)$ -- a genuinely Banach-valued setting in the
+sense discussed above. Reproducing both experiments therefore lets this
+report demonstrate, rather than merely describe, the practical consequence
+of the Hilbert/Banach distinction: identical network architectures and
+training protocol are applied to an $L^2$-valued and an $L^4$-valued
+operator, and the resulting test-error behavior can be compared directly.
+
+\section{Relevance of the Target Paper}
+
+The paper by Adcock, Dexter and Moraga \cite{adcock2024holomorphic} is the
+central reference for this practical work because it combines a theoretical analysis of deep operator learning with numerical experiments on parametric PDEs.
+The authors study the problem of learning operators of the form
+\[
+    F : \mathcal{X} \to \mathcal{Y},
+\]
+where the input and output spaces may be infinite-dimensional function spaces. This setting matches the structure of many PDE problems, where an input coefficient, forcing term, or parameter field is mapped to the corresponding solution field.
+
+A particularly relevant aspect of the paper is its focus on holomorphic
+operators. In parametric PDEs, the solution map often depends smoothly or
+analytically on the input parameters under suitable assumptions. This additional regularity can be exploited to obtain stronger approximation and learning guarantees than would be possible for general Lipschitz operators. The target paper uses this structure to prove near-optimal generalization bounds for deep learning methods applied to holomorphic operators.
+
+The paper is also relevant because it goes beyond the standard Hilbert-space setting. Much of the existing theory for operator learning is formulated for operators whose outputs lie in Hilbert spaces, such as $L^2(\Omega)$. However, some PDE formulations naturally lead to Banach-valued solution spaces, for example spaces such as $L^4(\Omega)$. By considering operators between Banach spaces, the paper addresses a more general setting that is closer to certain mixed and non-linear PDE formulations.
+
+For the practical part of this project, the most important part of the paper is the numerical study. The authors test fully connected neural networks on several parametric PDE problems, including an elliptic diffusion equation, the Navier-Stokes-Brinkman equations, and a stationary Boussinesq equation. These experiments provide a clear reproduction target: generate parametric PDE data, train a neural network surrogate, and study how the test error changes with the number of training samples.
+
+This project reproduces the parametric elliptic diffusion equation and the
+Navier--Stokes--Brinkman equations, the two Hilbert- and Banach-valued
+examples from the paper's numerical study (the third, the stationary
+Boussinesq equation, is outside the scope of this practical work). Both
+experiments are reproduced with the paper's own experimental pipeline
+rather than a simplified proxy: the training and test data are generated by
+solving the mixed finite element formulations stated in the paper's
+appendix, the test error is evaluated on a deterministic Clenshaw--Curtis
+sparse-grid quadrature exactly as the paper specifies, and fully connected
+neural networks are trained following the paper's stated architecture and
+optimization protocol. In particular, the project follows the same general
+idea of sampling parameter vectors, computing corresponding PDE solutions,
+training fully connected neural networks, and evaluating the relative test
+error, while additionally comparing PyTorch and JAX implementations of the
+full pipeline against each other.
+
+The target paper therefore serves two roles in this work. First, it provides the mathematical motivation for studying neural-network approximations of parametric PDE solution operators. Second, it provides the experimental reference against which the PyTorch and JAX reimplementations in this project are compared.
+%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

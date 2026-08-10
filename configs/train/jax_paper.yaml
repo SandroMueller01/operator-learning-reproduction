@@ -1,0 +1,22 @@
+# Full paper-spec JAX training config (Appendix A.2(iv)): Adam,
+# exponentially-decaying learning rate, up to 60,000 epochs or until the
+# loss reaches 5e-7, single precision. See configs/train/pytorch_paper.yaml
+# for the equivalent PyTorch config and the decay_rate provenance note.
+training:
+  framework: jax
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+  scheduler:
+    name: exponential_decay
+    decay_rate: 0.9999
+  batch_size: full
+  epochs: 60000
+  loss_tolerance: 5.0e-7
+  loss:
+    name: mse
+  dtype: float32
+
+logging:
+  log_every: 1000

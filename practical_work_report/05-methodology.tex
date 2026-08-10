@@ -1,0 +1,179 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{Methodology for Reproduction}
+\label{sec:methodology}
+
+\section{Selected Experiments from the Paper}
+
+Both reproduced experiments are posed on the unit square $\Omega = (0,1)^2$
+and share the same parametric structure: a coefficient or data field
+depends on a parameter vector $x \in [-1,1]^d$, $d \in \{4,8\}$, through one
+of two families used throughout the paper. The \emph{affine} family
+expands the coefficient linearly in $x$, while the \emph{log-transformed}
+family expands the logarithm of the coefficient, following the paper's
+appendix~B formula
+\[
+    a(z,x) = \exp\Big(1 + x_1\Big(\tfrac{\sqrt{\pi\beta}}{2}\Big)^{1/2}
+    + \sum_{j=2}^{d} \zeta_j\,\theta_j(z)\,x_j\Big),
+\]
+with $\zeta_j = (\sqrt{\pi\beta})^{1/2}\exp\!\big(-(\lfloor j/2\rfloor\pi\beta)^2/8\big)$,
+$\theta_j$ an alternating sine/cosine basis in the spatial coordinate $z_1$,
+and $\beta_c = 1/8$, $\beta_p = \max(1, 2\beta_c)$, $\beta = \beta_c/\beta_p$.
+Each of the two PDEs is therefore instantiated in four cases (affine/log
+$\times$ $d\in\{4,8\}$), giving eight cases in total across the two
+experiments.
+
+\paragraph{Parametric elliptic diffusion.} The diffusion problem is posed
+in mixed form: find $(\sigma, u) \in H(\mathrm{div};\Omega) \times L^2(\Omega)$
+such that
+\[
+    \int_\Omega \frac{\sigma \cdot \tau}{a(x)}\,\mathrm{d}\Omega
+    + \int_\Omega u\,\mathrm{div}(\tau)\,\mathrm{d}\Omega
+    = G(\tau)
+    \quad \forall\, \tau \in H(\mathrm{div};\Omega),
+\]
+\[
+    \int_\Omega v\,\mathrm{div}(\sigma)\,\mathrm{d}\Omega
+    = -\int_\Omega f v\,\mathrm{d}\Omega
+    \quad \forall\, v \in L^2(\Omega),
+\]
+with forcing $f = 10$ and Dirichlet data $u = 0.5$ on the bottom edge of
+$\Omega$ and $u = 0$ on the remaining boundary. In this mixed formulation
+the Dirichlet data enters \emph{naturally}, through the boundary functional
+$G(\tau) = \int_{\partial\Omega} g\,(\tau\cdot n)\,\mathrm{d}s$, rather than
+as an essential boundary condition on a primal $H^1(\Omega)$ space -- a
+structural difference from a standard finite-difference or primal-FEM
+discretization that must be respected for the reproduction to match the
+paper's actual formulation.
+
+\paragraph{Navier--Stokes--Brinkman.} The NSB system is posed in the
+four-field mixed form of Gatica, N\'{u}\~{n}ez and Ruiz-Baier
+\cite{gatica2022nsb}, the paper's own cited source for this formulation:
+find $(u, t, \sigma, \gamma) \in \mathbf{L}^4(\Omega) \times L^2_{\mathrm{tr}}(\Omega)
+\times H_0(\mathrm{div}_{4/3};\Omega) \times L^2_{\mathrm{skew}}(\Omega)$
+satisfying the nonlinear residual system with convective term
+$\int (u\otimes u):s$, viscosity coupling
+$\lambda \int a(x)\,t : s$, and a Brinkman reaction term $\eta\, u$, where
+$\lambda = 0.1$ and $\eta(x) = 10 + z_1^2 + z_2^2$. A Nitsche-type penalty
+term $\kappa \langle (\sigma + u\otimes u)n, \tau n\rangle_{\partial\Omega_{\mathrm{out}}} = 0$
+with $\kappa = 10^4$ enforces the outlet condition weakly, forcing is
+$f = (0,-1)$, and an inlet velocity profile is prescribed on the top
+boundary. Because the primary unknown $u$ is sought in
+$\mathbf{L}^4(\Omega)$, this experiment is Banach-valued in the sense of
+Section~\ref{sec:background}, unlike the Hilbert-valued diffusion problem.
+
+\section{Data Generation / Dataset Construction}
+
+\paragraph{Finite element discretization.} Both PDEs are discretized with
+FEniCS~2019.1.0 (legacy \texttt{dolfin}), run inside a WSL2 Ubuntu
+environment since the required legacy FEniCS build is not available on
+native Windows. The diffusion problem uses lowest-order
+Raviart--Thomas/discontinuous-Galerkin elements, $RT_1 \times DG_0$
+\cite{raviartthomas1977}, the standard mixed-Poisson element pair; the mesh
+resolution was calibrated so that the resulting degree-of-freedom count and
+mesh spacing match the values reported in the paper as closely as
+achievable with a structured mesh (\texttt{mshr}, the unstructured mesh
+generator the paper's figures suggest was used, is not usable in this
+environment due to a \texttt{pybind11} ABI incompatibility with the
+installed FEniCS build; this is a documented deviation, see
+Appendix~\ref{app:an-appendix}). The NSB problem uses the
+Arnold--Falk--Winther-type element family
+\cite{arnoldfalkwinther2007} from \cite{gatica2022nsb}: $BDM_1$ for the
+pseudostress $\sigma$, and $DG_0$ for velocity $u$ and skew vorticity
+$\gamma$, together with $DG_1$ for the trace-free strain $t$. The nonlinear
+system is solved with Newton's method via
+\texttt{NonlinearVariationalSolver}.
+
+\paragraph{Sparse-grid test protocol.} Rather than drawing an independent
+random test sample, the test error is evaluated on a fixed, deterministic
+Clenshaw--Curtis sparse grid \cite{clenshawcurtis1960} over $[-1,1]^d$,
+built with the Tasmanian toolkit. Sparse grids construct a
+quadrature/interpolation point set for a $d$-dimensional hypercube from
+one-dimensional rules via Smolyak's combination technique
+\cite{smolyak1963}, which grows far more slowly with
+$d$ than a full tensor-product grid -- the property that makes a
+deterministic, exhaustive test discretization feasible at $d=8$ at all. The
+same sparse-grid test set is shared across all training-set sizes $m$ and
+all twelve random trials within a case, exactly matching the paper's
+protocol of reusing one deterministic test discretization per case. The
+sparse-grid level is not stated numerically in the paper and was therefore
+chosen empirically (documented per case in the generated dataset metadata)
+to balance test-set resolution against the combinatorial growth of
+sparse-grid points at $d = 8$.
+
+\paragraph{Bochner-norm test error.} The relative test error is measured in
+the FEM-mass-matrix-weighted norm $\lVert \cdot \rVert_Y$ induced by the
+function space's mass matrix $M$ ($\lVert v \rVert_Y^2 = v^\top M v$),
+rather than a naive Euclidean sum-of-squares over raw degree-of-freedom
+vectors. This distinction matters in practice because both meshes are
+non-uniform, so an unweighted sum-of-squares would over-weight
+degrees of freedom on smaller elements. The mass matrix is assembled once
+per case during data generation and stored as a sidecar file so that the
+Windows-side training code never needs a FEniCS installation.
+
+\paragraph{Dataset scale.} Each of the eight cases (2 PDEs $\times$ 2
+coefficient families $\times$ 2 dimensions) provides training data for
+fourteen training-set sizes $m$ and twelve independent random trials per
+size, plus one shared deterministic sparse-grid test set, matching the
+paper's full experimental matrix.
+
+\section{Model Architecture}
+
+Following the paper's encoder--network--decoder structure
+(Section~\ref{sec:background}), each surrogate is a fully connected
+network mapping the parameter vector $x \in [-1,1]^d$ directly to the
+finite element degrees of freedom of the discretized solution. Six
+architecture/activation combinations are used, matching the paper: two
+depth/width configurations (4 hidden layers of width 40, and 10 hidden
+layers of width 100) combined with three activation functions (ReLU, ELU,
+and tanh). Weights are initialized with He/Kaiming-uniform initialization
+\cite{he2015delving} using a ReLU-derived bound for all three activations,
+matching Keras' \texttt{HeUniform} initializer, which is activation-agnostic
+-- a detail
+that required an explicit fix in both the PyTorch and JAX implementations,
+whose default Kaiming/Xavier conventions are activation-aware and would
+otherwise silently diverge from the paper's stated initialization
+(Sections~\ref{sec:pytorchreimplementation} and~\ref{sec:jaximplementation}).
+
+\section{Training Procedure}
+
+Both frameworks train with the Adam optimizer \cite{kingma2015adam} and an
+exponentially decaying learning rate schedule, minimizing the mean squared
+error between predicted and reference finite element degrees of freedom.
+For the diffusion experiment, training runs for up to 60{,}000 epochs, with
+an early stop once the training loss falls below a tolerance of
+$5 \times 10^{-7}$, exactly as stated in the paper's appendix. For the NSB
+experiment, this budget is reduced to 20{,}000 epochs and a
+$5 \times 10^{-6}$ tolerance -- a documented deviation
+(Appendix~\ref{app:an-appendix}) made after direct measurement showed NSB
+runs routinely needing tens of thousands of epochs under the same decaying
+schedule to approach the paper's tolerance, which made the full paper-scale
+matrix intractable on the hardware available for this practical work. A
+checkpoint/restore rule from the paper's appendix is implemented exactly
+for both experiments: model weights are checkpointed whenever either (a)
+the ratio between the current loss and the loss at the last checkpoint
+falls below $1/8$, or (b) the current weights achieve the best loss
+observed so far; after training terminates, the checkpointed weights are
+restored if the final-epoch loss is worse than the checkpoint's loss. This
+is a genuine two-trigger rule, not a simple best-loss tracker, and was
+implemented identically for PyTorch and JAX so that any residual difference
+between the two frameworks' results reflects their numerical/optimizer
+behavior rather than a difference in stopping policy.
+
+\section{Reproducibility Controls}
+
+Every one of the twelve trials per case uses a distinct, explicitly
+recorded random seed that controls both the training-set subsample drawn
+for that trial and the corresponding network initialization; no trial
+reuses another trial's seed. The sparse-grid test set, by contrast, is
+fully deterministic and identical across all trials and training-set
+sizes within a case, so that observed variation in test error reflects
+only the training-set sample and initialization, not test-set sampling
+noise. Aggregation across trials follows the paper's convention of
+geometric mean and geometric standard deviation
+($\exp(\mathrm{mean}(\log x))$, $\exp(\mathrm{std}(\log x))$) rather than
+arithmetic statistics, since relative errors are naturally log-scaled
+quantities and are plotted on log-log axes.
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

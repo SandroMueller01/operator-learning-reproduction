@@ -1,0 +1,169 @@
+# GENERATED ARTIFACT - do not hand-edit.
+# Materialized from configs\navier_stokes_brinkman.yaml, case 'affine_d8', by scripts/materialize_pde_configs.py.
+# Regenerate after changing the grouped config: python scripts/materialize_pde_configs.py
+
+experiment:
+  name: nsb_affine_d8
+  group_name: navier_stokes_brinkman
+  problem: navier_stokes_brinkman
+  equation: navier_stokes_brinkman
+  coefficient: affine
+  dimension: 8
+  targets:
+  - u
+  - p
+  case: affine_d8
+pde:
+  domain:
+    type: unit_square
+    spatial_dimension: 2
+    x_min: 0.0
+    x_max: 1.0
+    y_min: 0.0
+    y_max: 1.0
+  lambda: 0.1
+  inverse_permeability:
+    type: spatial_formula
+    formula: 10 + z_1^2 + z_2^2
+  forcing:
+    type: constant_vector
+    value:
+    - 0.0
+    - -1.0
+  strain:
+    type: symmetric_gradient
+  pressure_normalization:
+    type: zero_mean
+    formula: integral_Omega p = 0
+  boundaries:
+    inlet:
+      location: top
+      set: (0, 1) x {1}
+    outlet:
+      location: right
+      set: '{1} x (0, 1)'
+    walls:
+      locations:
+      - left
+      - bottom
+      set: '{0} x (0, 1) union (0, 1) x {0}'
+  boundary_conditions:
+    inlet:
+      type: dirichlet
+      formula: (0.0625)^(-1) * ((z_2 - 0.5) * (1 - z_2), 0.0)
+    walls:
+      type: no_slip
+      value:
+      - 0.0
+      - 0.0
+    outlet:
+      type: zero_normal_cauchy_stress
+coefficient:
+  name: affine
+  paper_symbol: a1
+  role: random_viscosity
+  base_value: 2.62
+  parameter_domain:
+  - -1.0
+  - 1.0
+  decay_power: 1.5
+  spatial_coordinate: z1
+  formula: 2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)
+discretization:
+  paper:
+    method: fenics_mixed_fem
+    library: fenics
+    fenics_version: 2019.1.0
+    formulation: mixed_variational
+    degrees_of_freedom:
+      velocity_u: 1464
+      pressure_p: 244
+    mesh:
+      same_as: diffusion
+      type: regular_triangulation
+      h_min: 0.0844
+      h_max: 0.1146
+    outlet_condition:
+      method: nitsche
+      kappa: 10000.0
+  implementation:
+    method: finite_difference
+    grid:
+      nx: 16
+      ny: 16
+      include_boundary: true
+data:
+  train_sizes:
+  - 10
+  - 20
+  - 30
+  - 40
+  - 50
+  - 60
+  - 70
+  - 80
+  - 90
+  - 100
+  - 200
+  - 300
+  - 400
+  - 500
+  seeds:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  dtype: float32
+  sampling:
+    distribution: uniform
+    lower: -1.0
+    upper: 1.0
+testing:
+  paper:
+    method: clenshaw_curtis_sparse_grid
+    toolkit: tasmanian
+    level: null
+    m_test: null
+    weighted_error: true
+  implementation:
+    method: random_uniform_test_set
+    test_size: 200
+    seed_offset: 10000
+evaluation:
+  metric: relative_l2
+  evaluate_targets_separately: true
+  aggregation:
+    mean: geometric
+    spread: geometric_std
+paths:
+  data_dir: data/processed/nsb_affine_d8
+  results_dir: results/nsb_affine_d8
+reproduction:
+  status: simplified_until_fenics_and_sparse_grid_are_implemented
+  aligned_with_paper:
+  - pde_equation
+  - domain
+  - lambda
+  - inverse_permeability
+  - forcing
+  - inlet_outlet_wall_boundary_decomposition
+  - affine_coefficient_formula
+  - log_coefficient_formula
+  - dimensions_d4_d8
+  - training_sizes
+  - number_of_trials
+  - target_variables_u_and_p
+  - model_config_references
+  not_exact_yet:
+  - finite_difference_solver_if_used
+  - simplified_boundary_handling_if_used
+  - random_test_set_if_used
+  - sparse_grid_level_not_yet_verified

@@ -1,0 +1,29 @@
+# Identical to pytorch_paper.yaml, except device is pinned to "cpu"
+# explicitly instead of "auto". Timing showed no benefit from CUDA for
+# these small full-batch MLPs (kernel-launch overhead dominates at this
+# problem size), and running many concurrent worker processes against one
+# shared GPU context would only add contention -- so scripts/run_parallel_sweep.py
+# uses this config to keep every worker on CPU deterministically.
+training:
+  framework: pytorch
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+  scheduler:
+    name: exponential_decay
+    decay_rate: 0.9999
+  batch_size: full
+  epochs: 60000
+  loss_tolerance: 5.0e-7
+  early_stopping:
+    enabled: false
+    patience: 0
+    min_delta: 0.0
+  loss:
+    name: mse
+  device: cpu
+  dtype: float32
+
+logging:
+  log_every: 1000

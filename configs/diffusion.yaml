@@ -1,0 +1,274 @@
+# Experiment group config for the parametric elliptic diffusion benchmark.
+#
+# This file contains all diffusion variants used in the paper-style experiment:
+#   - affine coefficient with d = 4
+#   - affine coefficient with d = 8
+#   - log-transformed coefficient with d = 4
+#   - log-transformed coefficient with d = 8
+#
+# The selected case is chosen from the command line, for example:
+#
+#   python scripts/generate_data.py --config configs/experiments/diffusion.yaml --case affine_d4
+#
+# Paper alignment:
+# The PDE, coefficient families, parameter dimensions, training sizes, model
+# references, and target variable follow the paper setup. Exact paper-level
+# reproduction still requires the FEniCS mixed FEM solver and sparse-grid
+# testing protocol.
+
+experiment:
+  # Human-readable group name for this PDE family.
+  group_name: diffusion
+
+  # Problem key used by the code registry.
+  problem: diffusion
+
+  # PDE equation identifier used for validation and dispatch.
+  equation: elliptic_diffusion
+
+  # The diffusion experiment predicts only the scalar solution field u.
+  default_targets: [u]
+
+
+pde:
+  # Physical domain used in the paper:
+  #   Omega = (0, 1)^2
+  domain:
+    type: unit_square
+    spatial_dimension: 2
+    x_min: 0.0
+    x_max: 1.0
+    y_min: 0.0
+    y_max: 1.0
+
+  # PDE:
+  #   -div(a(z, x) grad u(z)) = f
+  #
+  # The paper uses f = 10.
+  forcing: 10.0
+
+  # Dirichlet boundary conditions.
+  #
+  # Paper setup:
+  #   u = 0.5 on the bottom boundary (0, 1) x {0}
+  #   u = 0.0 on the remaining boundary
+  boundary_conditions:
+    type: dirichlet
+    bottom: 0.5
+    top: 0.0
+    left: 0.0
+    right: 0.0
+
+
+coefficients:
+  # Paper coefficient a_1 from equation (B.1).
+  #
+  # Formula:
+  #   a_1(z, x) = 2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)
+  #
+  # The finite-dimensional experiment truncates this expansion after d terms.
+  affine:
+    name: affine
+    paper_symbol: a1
+    base_value: 2.62
+    parameter_domain: [-1.0, 1.0]
+    decay_power: 1.5
+    spatial_coordinate: z1
+    formula: "2.62 + sum_j x_j sin(pi z_1 j) / j^(3/2)"
+
+  # Paper coefficient a_2 from equation (B.2).
+  #
+  # Important:
+  # This is the paper's actual log-transformed coefficient. It is not the same
+  # as exp of the affine sine expansion above.
+  #
+  # Formula structure:
+  #   a_2(z, x) = exp(
+  #       1
+  #       + x_1 * (sqrt(pi * beta) / 2)^(1/2)
+  #       + sum_{j=2}^d zeta_j * theta_j(z) * x_j
+  #   )
+  #
+  # where:
+  #   beta_c = 1/8
+  #   beta_p = max(1, 2 * beta_c)
+  #   beta   = beta_c / beta_p
+  #
+  # and:
+  #   zeta_j = (sqrt(pi * beta))^(1/2)
+  #            * exp(-((floor(j / 2) * pi * beta)^2) / 8)
+  #
+  #   theta_j(z) = sin(floor(j / 2) * pi * z_1 / beta_p), if j is even
+  #   theta_j(z) = cos(floor(j / 2) * pi * z_1 / beta_p), if j is odd
+  log:
+    name: log
+    paper_symbol: a2
+    parameter_domain: [-1.0, 1.0]
+    beta_c: 0.125
+    beta_p: 1.0
+    beta: 0.125
+    spatial_coordinate: z1
+    formula: "exp(1 + x_1 * (sqrt(pi * beta) / 2)^(1/2) + sum_{j=2}^d zeta_j theta_j(z) x_j)"
+
+
+discretization:
+  # Paper target discretization.
+  #
+  # The paper uses FEniCS 2019.1.0 and a conforming FEM discretization.
+  # For the diffusion problem, it reports K = 2622 total degrees of freedom.
+  paper:
+    method: fenics_mixed_fem
+    library: fenics
+    fenics_version: "2019.1.0"
+    degrees_of_freedom:
+      total: 2622
+    mesh:
+      type: regular_triangulation
+      h_min: 0.0844
+      h_max: 0.1146
+
+  # Current/simple implementation target.
+  #
+  # Keep this block if your current code still uses finite differences.
+  # For exact reproduction, this should eventually be replaced by the FEniCS
+  # FEM solver described above.
+  implementation:
+    method: finite_difference
+    grid:
+      nx: 16
+      ny: 16
+      include_boundary: true
+
+
+data:
+  # Paper training sizes.
+  train_sizes: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
+
+  # The paper runs 12 trials for the diffusion and NSB experiments.
+  # Using 0..11 is a practical deterministic representation of those trials.
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+  # The paper trains in single precision.
+  dtype: float32
+
+  # Training samples are iid from the uniform distribution on [-1, 1]^d.
+  sampling:
+    distribution: uniform
+    lower: -1.0
+    upper: 1.0
+
+
+testing:
+  # Paper testing protocol.
+  #
+  # The paper uses deterministic high-order Clenshaw-Curtis sparse-grid
+  # quadrature, generated with the TASMANIAN sparse-grid toolkit.
+  #
+  # I did not find the exact sparse-grid level or m_test value in the paper
+  # text checked, so these are left as null until verified.
+  paper:
+    method: clenshaw_curtis_sparse_grid
+    toolkit: tasmanian
+    level: null
+    m_test: null
+    weighted_error: true
+
+  # Current/simple implementation fallback.
+  #
+  # Keep this only while the sparse-grid testing protocol is not implemented.
+  implementation:
+    method: random_uniform_test_set
+    test_size: 200
+    seed_offset: 10000
+
+
+model:
+  # Default architecture config. This can be overridden from the command line.
+  #
+  # The paper evaluates 4x40 and 10x100 networks with ReLU, tanh, and ELU.
+  default_config: configs/model/mlp_4x40_elu.yaml
+
+
+training:
+  # Default training config. This can be overridden from the command line.
+  #
+  # For paper-level alignment, this training config should use Adam,
+  # exponentially decaying learning rate, He/Kaiming uniform initialization,
+  # and 60,000 epochs.
+  default_config: configs/train/pytorch_default.yaml
+
+
+evaluation:
+  # Paper reports relative L2_mu error.
+  metric: relative_l2
+
+  # The paper reports geometric mean and geometric standard deviation across trials.
+  aggregation:
+    mean: geometric
+    spread: geometric_std
+
+
+cases:
+  affine_d4:
+    # Paper case: diffusion with affine coefficient a_1,d and d = 4.
+    name: diffusion_affine_d4
+    coefficient: affine
+    dimension: 4
+    targets: [u]
+    paths:
+      data_dir: data/processed/diffusion_affine_d4
+      results_dir: results/diffusion_affine_d4
+
+  affine_d8:
+    # Paper case: diffusion with affine coefficient a_1,d and d = 8.
+    name: diffusion_affine_d8
+    coefficient: affine
+    dimension: 8
+    targets: [u]
+    paths:
+      data_dir: data/processed/diffusion_affine_d8
+      results_dir: results/diffusion_affine_d8
+
+  log_d4:
+    # Paper case: diffusion with log-transformed coefficient a_2,d and d = 4.
+    name: diffusion_log_d4
+    coefficient: log
+    dimension: 4
+    targets: [u]
+    paths:
+      data_dir: data/processed/diffusion_log_d4
+      results_dir: results/diffusion_log_d4
+
+  log_d8:
+    # Paper case: diffusion with log-transformed coefficient a_2,d and d = 8.
+    name: diffusion_log_d8
+    coefficient: log
+    dimension: 8
+    targets: [u]
+    paths:
+      data_dir: data/processed/diffusion_log_d8
+      results_dir: results/diffusion_log_d8
+
+
+reproduction:
+  # This status should be updated to "exact" only when the FEniCS FEM solver
+  # and sparse-grid testing protocol are implemented.
+  status: simplified_until_fenics_and_sparse_grid_are_implemented
+
+  aligned_with_paper:
+    - pde_equation
+    - domain
+    - forcing
+    - boundary_conditions
+    - affine_coefficient_formula
+    - log_coefficient_formula
+    - dimensions_d4_d8
+    - training_sizes
+    - number_of_trials
+    - target_variable_u
+    - model_config_references
+
+  not_exact_yet:
+    - finite_difference_solver_if_used
+    - random_test_set_if_used
+    - sparse_grid_level_not_yet_verified

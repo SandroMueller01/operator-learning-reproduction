@@ -1,0 +1,132 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+\cleardoubleoddpage%  Make sure to start each chapter on a new odd page
+\chapter{JAX Implementation and Efficiency Study}
+\label{sec:jaximplementation}
+
+\section{Why JAX for this Problem}
+
+JAX \cite{bradbury2018jax} is a natural second framework for this
+reproduction because the underlying learning problem -- a fixed-architecture
+multilayer perceptron trained with a static loss and optimizer for a fixed
+number of epochs on a fixed-size dataset -- is exactly the regime in which
+JAX's just-in-time compilation and functional programming model are
+expected to pay off: the training step can be compiled once via
+\texttt{jax.jit} and then executed as compiled XLA code for the full epoch
+loop, without the per-step Python dispatch overhead that a straightforward
+PyTorch training loop incurs. The sweep in this project runs the training
+loop on the order of $10^4$ times per framework across the full paper
+matrix (8 cases $\times$ 6 architectures $\times$ 14 training sizes
+$\times$ 12 trials, doubled for the NSB experiment's two targets $u$ and
+$p$), so per-run compilation and dispatch overhead is not incidental -- it
+is repeated at full sweep scale, making JAX's compilation model directly
+relevant to overall wall-clock time rather than a micro-optimization.
+
+\section{JAX Reimplementation Strategy}
+
+The JAX implementation mirrors the PyTorch implementation's structure as
+closely as the two frameworks' programming models allow: an equivalent
+multilayer perceptron built from explicit parameter pytrees, a training
+loop built around \texttt{optax.adam} combined with
+\texttt{optax.exponential\_decay} for the learning-rate schedule, and the
+same sweep driver contract (case, architecture, training size, trial seed)
+as the PyTorch sweep, reading the identical \texttt{.npz} training/test
+files so that both frameworks train on exactly the same data. The two
+implementation decisions documented for PyTorch in
+Section~\ref{sec:pytorchreimplementation} -- Keras-style
+activation-agnostic He initialization and per-trial seeding via
+\texttt{jax.random.PRNGKey(trial\_seed)} -- apply identically here; the
+JAX default initializer (which otherwise resolves to a Xavier-family
+initialization) and the earlier, pre-fix behavior of reusing a single
+fixed seed across all twelve trials were both corrected to match the
+paper's protocol before any sweep data was generated.
+
+The paper's checkpoint/restore rule (Section~\ref{sec:methodology}) is
+implemented with the same two triggers as the PyTorch version, but exploits
+JAX's immutable pytrees: because JAX parameters cannot be mutated in
+place, snapshotting the checkpoint is a plain reassignment of the
+parameter pytree rather than an explicit deep copy, which is both simpler
+and avoids any risk of the PyTorch-style aliasing bugs that an in-place
+\texttt{state\_dict} copy could otherwise introduce.
+
+\section{Efficiency Metrics}
+
+The framework comparison collects, for every (case, architecture, training
+size, trial) run in both frameworks: wall-clock training time, the final
+and best training loss, and the sparse-grid test error in the
+mass-matrix-weighted $Y$-norm (Section~\ref{sec:methodology}). These are
+aggregated geometrically (Section~\ref{sec:methodology}) and compared
+directly between frameworks in
+Section~\ref{sec:experimentalresults}.
+
+Measured over the full sweep (24{,}094 completed runs,
+Section~\ref{sec:experimentalresults}), the training-time ratio between
+frameworks is case-dependent rather than uniformly in JAX's favor. For
+diffusion, PyTorch is consistently slower than JAX by 9--28\%, the ratio
+growing with the parametric dimension $d$. For NSB, the picture is mixed:
+JAX is still faster in most of the eight (case, target) combinations, but
+PyTorch is marginally faster in two of them
+(Table~\ref{tab:framework-ratio}). This is consistent with a JIT
+compilation overhead effect rather than a raw execution-speed difference:
+diffusion has a single output target and the four training runs per
+(architecture, $m$) combination are the dominant cost, so \texttt{jax.jit}'s
+one-time compilation cost per distinct input shape is amortized well. NSB
+doubles the number of distinct (target, architecture) shape combinations
+the sweep compiles against, so a larger share of each JAX case's total time
+is compilation rather than compiled execution -- eroding, and in two cases
+reversing, JAX's advantage. This project did not instrument peak memory
+usage directly (no memory profiler was wired into the sweep driver), so no
+quantitative memory comparison is reported; qualitatively, JAX's
+ahead-of-time compilation model means its peak memory footprint per run is
+reached earlier and held more predictably than PyTorch's eager execution,
+but this was not measured.
+
+\section{Experimental Setup for Fair Comparison}
+
+To keep the comparison controlled, both frameworks are run against the
+identical dataset files, the identical twelve per-case trial seeds, the
+identical six architecture configurations, and the identical
+checkpoint/restore and stopping rule -- the paper's full 60{,}000-epoch cap
+and $5\times10^{-7}$ loss tolerance for diffusion, and the documented
+reduced 20{,}000-epoch/$5\times10^{-6}$ budget for NSB
+(Appendix~\ref{app:an-appendix}), applied identically to both frameworks
+within each experiment so the PyTorch/JAX comparison itself is always
+protocol-for-protocol even though the two experiments' protocols differ
+from each other. Both sweeps are run sequentially on the
+same machine rather than interleaved, so that neither framework benefits
+from a warmer cache or an otherwise idle system at the other's expense.
+No attempt is made to give JAX an advantage through additional
+JAX-specific tuning (e.g.\ custom XLA flags) beyond what the paper's
+training protocol already specifies, since the goal of the comparison is
+protocol-for-protocol parity, not a best-case performance benchmark for
+either framework individually.
+
+\section{Observed Trade-offs: Pytorch vs JAX}
+
+The two frameworks reach statistically indistinguishable final test errors
+under the identical protocol: the geometric-mean PyTorch/JAX error ratio
+lies between 0.986 and 1.006 across all twelve (case, target) combinations
+in both experiments (Section~\ref{sec:experimentalresults},
+Table~\ref{tab:framework-ratio}) -- well within a single trial's own
+geometric standard deviation. This is exactly what identical
+initialization, optimizer, schedule, and checkpoint rule predict, and it
+is itself a useful correctness check: two independently implemented
+training loops converging this closely on identical data is evidence that
+neither implementation has a hidden bug that the other doesn't share.
+
+The training-time trade-off is more interesting than a flat "JAX is
+faster." JAX wins consistently for diffusion (9--28\% faster), where the
+sweep's shape diversity is lower and per-run compilation cost is amortized
+well. For NSB, where the two-target ($u$, $p$) structure doubles the
+number of distinct compiled shapes, JAX's advantage shrinks and disappears
+entirely in two of the eight cases -- PyTorch's eager execution has no
+compilation cost to amortize in the first place, so it is less sensitive
+to how many distinct architecture/shape combinations a sweep touches. The
+practical implication for a project like this one is that JAX's
+compilation model is a real, measurable advantage at this problem scale,
+but the size of that advantage depends on how much shape diversity a given
+sweep has -- a consideration that would matter for deciding which
+framework to reach for on a new sweep design, not just a one-time
+benchmark number.
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
