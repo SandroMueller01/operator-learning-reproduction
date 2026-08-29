@@ -11,16 +11,15 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from ol_reproduction.data.sampling import sample_uniform_parameters
-from ol_reproduction.pde.diffusion.fenics_mixed_solver import build_diffusion_mesh
+from ol_reproduction.pde.diffusion.fenics_mixed_solver import load_original_mesh
 from ol_reproduction.pde.navier_stokes_brinkman.fenics_solver import (
     solve_nsb_mixed_fenics,
 )
 
-RESOLUTION = 23
 N_WARMUP = 2
 N_TIMED = 20
 
-mesh = build_diffusion_mesh(RESOLUTION)
+mesh = load_original_mesh()
 parameters = sample_uniform_parameters(num_samples=N_WARMUP + N_TIMED, dimension=4, seed=123)
 
 for i in range(N_WARMUP):

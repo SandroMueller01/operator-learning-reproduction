@@ -69,14 +69,30 @@ def relative_l2_error_mass_weighted(
 
     This is the paper's actual test-error formula (Appendix A.2(vi)):
 
-        e_F^test = sqrt(sum_i w_i ||F(X_i) - Fhat(X_i)||^2_Y)
-                   / sqrt(sum_i w_i ||F(X_i)||^2_Y)
+        e_F^test = sqrt(|sum_i w_i ||F(X_i) - Fhat(X_i)||^2_Y|)
+                   / sqrt(|sum_i w_i ||F(X_i)||^2_Y|)
 
     where ``||v||^2_Y = v^T M v`` for the FEM mass matrix M (see
     ``ol_reproduction.pde.mass_matrix``), not a naive sum-of-squares over
     raw DOF values (that's what ``relative_l2_error`` computes instead --
     kept separate rather than changed in place, since it's used elsewhere
     for plain unweighted comparisons).
+
+    The ``sum_i w_i (...)`` accumulation is wrapped in ``abs(...)`` for
+    each side of the ratio separately (not just the final ratio) --
+    matching the authors' own ``callbacks.py``
+    (``L2_err = sqrt(abs(L2_err * 2**-d))``,
+    ``L2_norm = sqrt(abs(L2_norm * 2**-d))``) exactly. This is not
+    optional cosmetics: the sparse-grid ``w_i`` are Smolyak
+    combination-technique weights, which are genuinely negative at a
+    meaningful fraction of points (720/3937 at d=8, 336/1105 at d=4, in
+    this repo's own quadrature files) even though each 1D Clenshaw-Curtis
+    rule underneath has only nonnegative weights. Without the ``abs()``,
+    a poorly-fit model (large per-sample squared error concentrated at
+    negative-weight points) can push the un-absed weighted sum negative,
+    which silently produces ``NaN`` under the square root instead of a
+    large-but-finite error -- caught via NaNs appearing in real sweep
+    output, not by the original (all-nonnegative-weight) unit tests.
 
     Parameters
     ----------
@@ -144,7 +160,7 @@ def relative_l2_error_mass_weighted(
     diff_quad_form = _quad_form_per_sample(difference)
     true_quad_form = _quad_form_per_sample(y_true)
 
-    numerator = float(np.sum(parametric_weights * diff_quad_form))
-    denominator = float(np.sum(parametric_weights * true_quad_form))
+    numerator = abs(float(np.sum(parametric_weights * diff_quad_form)))
+    denominator = abs(float(np.sum(parametric_weights * true_quad_form)))
 
-    return float(np.sqrt(numerator / (denominator + eps)))
+    return float(np.sqrt(numerator) / np.sqrt(denominator + eps))

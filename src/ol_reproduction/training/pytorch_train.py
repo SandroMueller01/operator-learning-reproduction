@@ -13,18 +13,18 @@ from torch import nn
 
 from ol_reproduction.config.load import load_yaml
 from ol_reproduction.data.dataset_io import load_npz_dataset
-from ol_reproduction.evaluation.relative_error import relative_l2_error
+from ol_reproduction.evaluation.relative_error import (
+    relative_l2_error,
+    relative_l2_error_mass_weighted,
+)
 from ol_reproduction.models.pytorch_mlp import (
     PyTorchMLP,
     initialize_weights,
 )
+from ol_reproduction.pde.mass_matrix import load_mass_matrix_npz
 
 
 ConfigDict = dict[str, Any]
-
-# Paper Appendix A.2(iv): save a checkpoint whenever the ratio between the
-# current loss and the last checkpoint's loss drops below this threshold.
-CHECKPOINT_LOSS_RATIO_THRESHOLD = 1.0 / 8.0
 
 
 def train_pytorch_from_files(
@@ -82,6 +82,9 @@ def train_pytorch_from_files(
     model_config = load_yaml(model_config_path)
     train_config = load_yaml(train_config_path)
 
+    mass_matrix = _load_mass_matrix_for_target(dataset_path, target)
+    test_weights = test_data.get("w")
+
     return train_pytorch(
         x_train=train_data["x"],
         y_train=train_data[target_key],
@@ -90,7 +93,30 @@ def train_pytorch_from_files(
         model_config=model_config,
         train_config=train_config,
         trial_seed=trial_seed,
+        mass_matrix=mass_matrix,
+        test_weights=test_weights,
     )
+
+
+def _load_mass_matrix_for_target(dataset_path: Path, target: str):
+    """Load the FEM mass matrix for ``target``'s function space, if a
+    sidecar mass-matrix file exists next to the dataset.
+
+    Diffusion cases store a single ``mass_matrix.npz`` (target is always
+    ``u``); NSB cases store ``mass_matrix_u.npz`` and ``mass_matrix_p.npz``
+    separately. Returns ``None`` (rather than raising) if no matching file
+    is found, so callers that pass raw arrays directly (e.g. tests) are
+    unaffected -- ``train_pytorch`` falls back to an unweighted L2 error
+    in that case.
+    """
+    candidates = [
+        dataset_path / f"mass_matrix_{target.strip().lower()}.npz",
+        dataset_path / "mass_matrix.npz",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return load_mass_matrix_npz(candidate)
+    return None
 
 
 def train_pytorch(
@@ -101,6 +127,8 @@ def train_pytorch(
     model_config: ConfigDict,
     train_config: ConfigDict,
     trial_seed: int | None = None,
+    mass_matrix=None,
+    test_weights: np.ndarray | None = None,
 ) -> dict[str, float]:
     """Train a PyTorch MLP and evaluate relative test error.
 
@@ -121,6 +149,16 @@ def train_pytorch(
     trial_seed:
         Trial index used to seed weight initialization (see
         ``train_pytorch_from_files``).
+    mass_matrix:
+        Optional FEM mass matrix (``scipy.sparse``) for the target's
+        function space. When given, the test error is the paper's actual
+        mass-matrix-weighted Bochner (Y-norm) error
+        (``relative_l2_error_mass_weighted``); when omitted, it falls back
+        to a plain unweighted relative L2 error over raw DOF values.
+    test_weights:
+        Optional sparse-grid quadrature weights, shape ``(m_test,)``,
+        applied alongside ``mass_matrix`` per the paper's test-error
+        formula (Appendix A.2(vi)). Ignored if ``mass_matrix`` is ``None``.
 
     Returns
     -------
@@ -202,10 +240,18 @@ def train_pytorch(
         inputs=x_test_tensor,
     )
 
-    test_error = relative_l2_error(
-        y_true=y_test,
-        y_pred=y_pred,
-    )
+    if mass_matrix is not None:
+        test_error = relative_l2_error_mass_weighted(
+            y_true=y_test,
+            y_pred=y_pred,
+            mass_matrix=mass_matrix,
+            parametric_weights=test_weights,
+        )
+    else:
+        test_error = relative_l2_error(
+            y_true=y_test,
+            y_pred=y_pred,
+        )
 
     return {
         "final_train_loss": float(training_result["final_loss"]),
@@ -478,15 +524,20 @@ def _run_training_loop(
 ) -> dict[str, float | int | bool]:
     """Run full-batch PyTorch training.
 
-    Implements the paper's checkpoint/restore rule (Appendix A.2(iv)):
-    save the weights whenever either (a) the ratio between the current
-    loss and the *last checkpoint's* loss drops below 1/8, or (b) the
-    current weights produce the best loss observed so far; after training,
-    restore the saved checkpoint if the final loss is worse than the
-    checkpoint's loss. This runs unconditionally (it is the paper's core
-    training procedure) and is independent of ``early_stopping_config``,
-    which is a separate, off-by-default patience mechanism that halts
-    training early rather than rolling back to a better checkpoint.
+    Implements the paper's actual checkpoint/restore rule, read directly
+    from the authors' own ``EarlyStoppingPredictHistory`` Keras callback
+    (``PDE_DATA/CODE_P/callbacks.py``): snapshot the weights every epoch
+    whose loss is the best seen so far (a single trigger -- there is no
+    separate loss-ratio trigger for checkpointing; a ``1/16`` loss-ratio-or
+    -10000-epoch condition exists in the authors' code, but it only gates
+    how often they compute/log an expensive test-set error during training,
+    and has no effect on which weights get saved or restored). After
+    training, restore the saved checkpoint if the final loss is worse than
+    the checkpoint's loss (``current_loss > best_loss`` in their code).
+    This runs unconditionally (it is the paper's core training procedure)
+    and is independent of ``early_stopping_config``, which is a separate,
+    off-by-default patience mechanism that halts training early rather
+    than rolling back to a better checkpoint.
 
     Parameters
     ----------
@@ -532,7 +583,6 @@ def _run_training_loop(
 
     checkpoint_state: dict[str, torch.Tensor] | None = None
     checkpoint_loss = float("inf")
-    last_checkpoint_loss: float | None = None
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -553,17 +603,8 @@ def _run_training_loop(
         is_best_so_far = final_loss < best_loss
         if is_best_so_far:
             best_loss = final_loss
-
-        ratio_trigger = (
-            last_checkpoint_loss is not None
-            and last_checkpoint_loss > 0.0
-            and (final_loss / last_checkpoint_loss) < CHECKPOINT_LOSS_RATIO_THRESHOLD
-        )
-
-        if ratio_trigger or is_best_so_far:
             checkpoint_state = copy.deepcopy(model.state_dict())
             checkpoint_loss = final_loss
-            last_checkpoint_loss = final_loss
 
         if _should_log_epoch(
             epoch=epoch,

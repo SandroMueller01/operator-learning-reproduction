@@ -50,7 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from ol_reproduction.data.dataset_io import save_npz_dataset  # noqa: E402
 from ol_reproduction.data.sampling import sample_uniform_parameters  # noqa: E402
-from ol_reproduction.pde.diffusion.fenics_mixed_solver import build_diffusion_mesh  # noqa: E402
+from ol_reproduction.pde.diffusion.fenics_mixed_solver import load_original_mesh  # noqa: E402
 from ol_reproduction.pde.mass_matrix import (  # noqa: E402
     assemble_mass_matrix_csr,
     save_mass_matrix_npz,
@@ -62,7 +62,7 @@ from ol_reproduction.pde.navier_stokes_brinkman.fenics_solver import (  # noqa: 
 
 TRAIN_SIZES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
 SEEDS = list(range(12))
-MESH_RESOLUTION = 23  # same mesh as the diffusion case (Phase 3 calibration)
+FE_DEGREE = 1  # matches the authors' --FE_degree default; same mesh as diffusion
 
 _worker_mesh = None  # built once per worker process, in _pool_worker_init
 
@@ -87,7 +87,7 @@ def _pool_worker_init() -> None:
     """Runs once per worker process: build this worker's own mesh so no
     dolfin/PETSc state is shared across the fork boundary."""
     global _worker_mesh
-    _worker_mesh = build_diffusion_mesh(MESH_RESOLUTION)
+    _worker_mesh = load_original_mesh()
 
 
 def _pool_solve_one(task: tuple[str, np.ndarray]):
@@ -124,18 +124,18 @@ def main() -> None:
     output_dir = Path(args.output_dir) if args.output_dir else repo_root / "data/processed" / args.case_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Building mesh (resolution={MESH_RESOLUTION})...")
-    mesh = build_diffusion_mesh(MESH_RESOLUTION)
+    print("Loading the authors' original mesh (data/original_mesh/poisson.xml)...")
+    mesh = load_original_mesh()
 
-    function_space, _ = build_nsb_function_space(mesh)
-    u_space = function_space.sub(1).collapse()
+    function_space, _ = build_nsb_function_space(mesh, fe_degree=FE_DEGREE)
+    u_space = function_space.sub(0).collapse()
     if not (output_dir / "mass_matrix_u.npz").exists():
         print("Assembling u mass matrix...")
         save_mass_matrix_npz(output_dir / "mass_matrix_u.npz", assemble_mass_matrix_csr(u_space))
 
     import dolfin as df
 
-    p_space = df.FunctionSpace(mesh, "DG", 1)
+    p_space = df.FunctionSpace(mesh, "DG", 0)
     if not (output_dir / "mass_matrix_p.npz").exists():
         print("Assembling p mass matrix...")
         save_mass_matrix_npz(output_dir / "mass_matrix_p.npz", assemble_mass_matrix_csr(p_space))
@@ -231,8 +231,9 @@ def main() -> None:
         "coefficient": args.coefficient,
         "dimension": args.dimension,
         "mesh": {
-            "method": "structured_UnitSquareMesh_mshr_unavailable",
-            "resolution": MESH_RESOLUTION,
+            "method": "original_authors_mesh",
+            "source": "data/original_mesh/poisson.xml",
+            "fe_degree": FE_DEGREE,
             "num_cells": mesh.num_cells(),
             "num_dofs_u": u_space.dim(),
             "num_dofs_p": p_space.dim(),
@@ -257,8 +258,9 @@ def main() -> None:
         "note": (
             "Generated with the nonlinear mixed FEM NSB solver "
             "(pde/navier_stokes_brinkman/fenics_solver.py), paper eq. "
-            "B.14-B.15, AFW elements. See module docstring for documented "
-            "deviations (inlet BC substitution, post-hoc zero-mean pressure)."
+            "B.14-B.15, AFW elements (BDM2/DG1vec/DG1/DG2vec3) on the "
+            "paper authors' own mesh (data/original_mesh/poisson.xml), "
+            "matching PDE_DATA/CODE_NSB exactly."
         ),
     }
     with open(output_dir / "metadata.json", "w", encoding="utf-8") as handle:

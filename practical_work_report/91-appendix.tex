@@ -4,81 +4,35 @@
 \chapter{Documented Deviations from the Paper}
 \label{app:an-appendix}
 
-The paper's description of both experiments leaves a number of
-implementation details either unstated or ambiguous, and this project
-predates its exact scope with one deliberate substitution of its own. This
-appendix collects every point at which the reproduction's implementation
-necessarily deviates from a literal reading of the paper, together with
-the reasoning behind the specific choice made and, where applicable, how
-the choice was calibrated against numbers or figures the paper does
-report. Cross-references point back to the chapter that introduces the
-relevant context.
+Most of the details that once needed to be reconstructed here (the mesh,
+the NSB finite element family, the inlet velocity, the pressure gauge, the
+sparse-grid level) turned out to be available in the paper authors' own
+released code, and this reproduction now matches all of them exactly, as
+already discussed in Chapter~\ref{sec:methodology} and revisited in
+Chapter~\ref{sec:experimentalresults} and Chapter~\ref{sec:conclusion}.
+What remains here are the two genuine, deliberate deviations from the
+paper that this reproduction still makes.
 
 \begin{description}
   \item[Deep learning framework (Section~\ref{sec:problemStatement}).]
   The paper's reference implementation uses TensorFlow/Keras. This project
   substitutes PyTorch and JAX, run side by side, as a deliberate project
-  constraint rather than an oversight; the PyTorch/JAX framework
+  constraint rather than an oversight. The PyTorch/JAX framework
   comparison in Section~\ref{sec:jaximplementation} is itself part of the
   intended deliverable. Because Keras' \texttt{HeUniform} initializer is
   activation-agnostic, both reimplementations had to be adjusted so that
   their own (activation-aware) default Kaiming/Xavier conventions matched
   Keras' behavior instead (Section~\ref{sec:pytorchreimplementation}).
 
-  \item[Diffusion mesh generator (Section~\ref{sec:methodology}).]
-  The paper's Fig.~4 shows a visibly non-uniform, apparently unstructured
-  mesh. The natural way to reproduce it, FEniCS's \texttt{mshr} mesh
-  generator, is not usable in the installed legacy-FEniCS environment due
-  to a \texttt{pybind11} ABI incompatibility between \texttt{mshr} and
-  \texttt{dolfin} that could not be resolved by reinstalling through
-  either \texttt{conda} or \texttt{mamba}. A structured
-  \texttt{UnitSquareMesh} is used instead, with its resolution calibrated
-  so that the resulting degree-of-freedom count and mesh spacing are as
-  close as achievable to the paper's reported values.
-
-  \item[NSB finite element family (Section~\ref{sec:methodology}).]
-  The paper's own appendix does not spell out the exact finite element
-  family used for the four-field Navier--Stokes--Brinkman mixed
-  formulation. The element family used here ($BDM_1$ pseudostress, $DG_0$
-  velocity and skew vorticity, $DG_1$ trace-free strain) is taken from
-  Gatica, N\'{u}\~{n}ez and Ruiz-Baier \cite{gatica2022nsb}, the paper's
-  own cited source for this formulation, and calibrated against the
-  degree-of-freedom counts the paper reports for this experiment.
-
-  \item[NSB inlet velocity profile (Section~\ref{sec:methodology}).]
-  The inlet velocity formula as printed in the paper is degenerate at one
-  corner of the inlet edge. An initial literal substitution produced a
-  severe, unphysical pressure spike at that corner, visible as a sharp
-  artifact inconsistent with the paper's own Fig.~6. Reflecting the
-  formula so that it vanishes at the wall corner instead of the outlet
-  corner removes the artifact and produces a clean, circulating flow
-  pattern that visually matches Fig.~6; this reflected form is used
-  throughout.
-
-  \item[NSB pressure gauge (Section~\ref{sec:methodology}).]
-  The paper's formulation fixes the pressure field's additive constant
-  through a Lagrange-multiplier constraint on the trace of the pseudostress
-  $\sigma$, which was not implemented. Instead, the pressure field
-  computed from $\sigma$ and $u$ is shifted by its own mean after solving,
-  enforcing $\int_\Omega p = 0$ exactly by construction rather than through
-  the constrained variational formulation itself.
-
-  \item[Sparse-grid level (Section~\ref{sec:methodology}).]
-  The paper does not state a numerical sparse-grid level for its
-  deterministic Clenshaw--Curtis test protocol. The level used for each
-  case was chosen empirically to balance test-set resolution against the
-  combinatorial growth of sparse-grid points at $d=8$, and is recorded in
-  that case's generated dataset metadata.
-
   \item[NSB training epoch budget (Section~\ref{sec:methodology}).]
-  The paper's stated training protocol -- up to 60{,}000 epochs, stopping
+  The paper's stated training protocol, up to 60{,}000 epochs, stopping
   once the training loss falls below an absolute tolerance of
-  $5\times10^{-7}$ -- is used unchanged for the diffusion experiment, where
+  $5\times10^{-7}$, is used unchanged for the diffusion experiment, where
   most runs converge well before the epoch cap. For NSB it is not: direct
   measurement (one task's loss trace showed $6.5\times10^{-6}$, still
   decreasing but far from the tolerance, after 11{,}000 of 60{,}000 epochs)
-  showed that a large fraction of NSB runs -- particularly the larger
-  architecture and larger training-set sizes -- need tens of thousands of
+  showed that a large fraction of NSB runs, particularly the larger
+  architecture and larger training-set sizes, need tens of thousands of
   epochs under the exponentially-decaying learning rate to approach
   $5\times10^{-7}$, and many effectively consume the full 60{,}000-epoch
   budget. Timed directly on this machine, the full NSB paper matrix
@@ -87,7 +41,7 @@ relevant context.
   tractable within the scope of this practical work. For the NSB experiment
   only, the epoch cap is reduced to 20{,}000 and the loss tolerance loosened
   to $5\times10^{-6}$ (configs/train/pytorch\_nsb.yaml,
-  configs/train/jax\_nsb.yaml); every other element of the training
+  configs/train/jax\_nsb.yaml). Every other element of the training
   protocol (optimizer, learning-rate schedule, checkpoint/restore rule,
   batch size, per-trial seeding) is unchanged. This is applied uniformly
   across all twelve trials of every NSB configuration, so that the

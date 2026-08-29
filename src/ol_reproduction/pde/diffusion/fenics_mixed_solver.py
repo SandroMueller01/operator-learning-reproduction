@@ -14,12 +14,20 @@ where ``d_a(sigma, tau) = int (sigma . tau) / a(x)``,
 Neumann portion, so the entire boundary contributes to ``G`` and no strong
 ``DirichletBC`` is imposed on either subspace).
 
-The element pair is the standard lowest-order mixed-Poisson choice: RT1 for
-``sigma`` (H(div)-conforming) and DG0 for ``u`` (L^2-conforming). The paper
-does not state its element family explicitly, only the resulting mesh
-statistics (K=2622 total DOF, h_min=0.0844, h_max=0.1146 on a visibly
-non-uniform triangulation, see Fig. 4) -- RT1 x DG0 is the standard starting
-hypothesis, calibrated against those numbers via ``build_diffusion_mesh``.
+The mesh and element pair now come directly from the paper authors' own
+released code (``PDE_DATA/CODE_P``, obtained from the supervisor after an
+earlier calibrated-approximation attempt turned out not to match): the mesh
+is their exact ``poisson.xml`` (143 vertices, 244 triangular cells,
+``data/original_mesh/poisson.xml`` in this repo), and the element pair is
+**BDM2 for sigma** (``FiniteElement('BDM', ..., FE_degree+1)`` with
+``FE_degree=1``) and **DG1 for u** (``FiniteElement('DG', ..., FE_degree)``)
+-- not the RT1 x DG0 previously assumed. On the real mesh this gives a
+total mixed DOF count of **2622** (sigma: 1890, u: 732), confirmed by direct
+computation and matching this repo's own long-standing calibration target
+exactly -- so the earlier RT1xDG0 assumption was the only thing that needed
+correcting, not the target DOF count itself. See
+``practical_work_report/91-appendix.tex`` for the full history of this
+correction.
 """
 
 from __future__ import annotations
@@ -81,23 +89,49 @@ class MixedDiffusionResult:
     mesh_info: DiffusionMeshInfo
 
 
-def build_diffusion_mesh(resolution: int):
-    """Build a triangular mesh of (0, 1)^2.
+_REPO_ROOT = None
 
-    The paper's mesh (Fig. 4) is visibly non-uniform (h_min != h_max),
-    suggesting an unstructured (e.g. mshr-generated) triangulation. This
-    repo's conda-forge ``mshr`` 2019.1.0 build has a known pybind11 ABI
-    incompatibility with the paired ``fenics`` 2019.1.0 build in this WSL
-    environment (``ImportError: generic_type: type "CSGGeometry"
-    referenced unknown base type "dolfin::Variable"`` -- reproducible via
-    ``scripts/wsl/test_mshr_import.py``, not fixed by reinstalling via
-    conda or mamba). If ``mshr`` is importable, it is used; otherwise this
-    falls back to a structured ``UnitSquareMesh``, which is uniform
-    (h_min == h_max) but whose ``resolution`` can still be calibrated to
-    match the paper's total DOF count K=2622 -- see
-    ``calibrate_mesh_resolution``. The paper does not state its exact mesh
-    generation method, so this is a documented, deliberate approximation
-    (see Phase 3 open risks), not a silent one.
+
+def _repo_root():
+    global _REPO_ROOT
+    if _REPO_ROOT is None:
+        from pathlib import Path
+
+        _REPO_ROOT = Path(__file__).resolve().parents[4]
+    return _REPO_ROOT
+
+
+def load_original_mesh():
+    """Load the paper authors' own mesh (``data/original_mesh/poisson.xml``).
+
+    This is the real mesh shipped in the authors' released code
+    (``CODE_P/meshes/poisson.xml`` and, identically,
+    ``CODE_NSB/meshes/poisson.xml`` -- both experiments share one mesh):
+    143 vertices, 244 triangular cells, h_min=0.0844, h_max=0.1146. Use this
+    instead of ``build_diffusion_mesh`` for any case that should match the
+    paper exactly.
+    """
+    _require_fenics()
+
+    mesh_path = _repo_root() / "data" / "original_mesh" / "poisson.xml"
+    if not mesh_path.exists():
+        raise FileNotFoundError(
+            f"Original mesh not found at {mesh_path}. Copy it from the "
+            "authors' released code (CODE_P/meshes/poisson.xml or "
+            "CODE_NSB/meshes/poisson.xml, identical files)."
+        )
+    return df.Mesh(str(mesh_path))
+
+
+def build_diffusion_mesh(resolution: int):
+    """Build a structured triangular mesh of (0, 1)^2.
+
+    Retained only as a fast, FEniCS-mshr-free fallback for smoke tests
+    that don't need to match the paper exactly (mshr itself has a known
+    pybind11 ABI incompatibility in this environment, reproducible via
+    ``scripts/wsl/test_mshr_import.py``). All paper-scale data generation
+    uses ``load_original_mesh`` instead, which is the authors' real mesh
+    and requires no calibration.
     """
     _require_fenics()
 
@@ -108,12 +142,16 @@ def build_diffusion_mesh(resolution: int):
     return df.UnitSquareMesh(resolution, resolution)
 
 
-def describe_mesh(mesh, resolution: int) -> DiffusionMeshInfo:
-    """Compute mesh/DOF statistics for a given mixed function space."""
+def describe_mesh(mesh, resolution: int, fe_degree: int = 1) -> DiffusionMeshInfo:
+    """Compute mesh/DOF statistics for a given mixed function space.
+
+    ``fe_degree`` matches the authors' ``--FE_degree`` CLI argument
+    (default 1): sigma uses ``BDM(fe_degree+1)``, u uses ``DG(fe_degree)``.
+    """
     _require_fenics()
 
-    sigma_element = df.FiniteElement("RT", mesh.ufl_cell(), 1)
-    u_element = df.FiniteElement("DG", mesh.ufl_cell(), 0)
+    sigma_element = df.FiniteElement("BDM", mesh.ufl_cell(), fe_degree + 1)
+    u_element = df.FiniteElement("DG", mesh.ufl_cell(), fe_degree)
     mixed_space = df.FunctionSpace(mesh, df.MixedElement([sigma_element, u_element]))
 
     num_dofs_sigma = mixed_space.sub(0).dim()
@@ -222,6 +260,7 @@ def solve_diffusion_mixed_fenics(
     base_value: float = 2.62,
     boundary_values: dict[str, float] | None = None,
     resolution_for_metadata: int = 0,
+    fe_degree: int = 1,
 ) -> MixedDiffusionResult:
     """Solve the mixed FEM diffusion problem (paper eq. B.9-B.12) once.
 
@@ -260,8 +299,8 @@ def solve_diffusion_mixed_fenics(
     left = float(boundary_values.get("left", 0.0))
     right = float(boundary_values.get("right", 0.0))
 
-    sigma_element = df.FiniteElement("RT", mesh.ufl_cell(), 1)
-    u_element = df.FiniteElement("DG", mesh.ufl_cell(), 0)
+    sigma_element = df.FiniteElement("BDM", mesh.ufl_cell(), fe_degree + 1)
+    u_element = df.FiniteElement("DG", mesh.ufl_cell(), fe_degree)
     mixed_space = df.FunctionSpace(mesh, df.MixedElement([sigma_element, u_element]))
 
     sigma, u = df.TrialFunctions(mixed_space)
@@ -295,7 +334,7 @@ def solve_diffusion_mixed_fenics(
 
     sigma_h, u_h = solution.split(deepcopy=True)
 
-    mesh_info = describe_mesh(mesh, resolution=resolution_for_metadata)
+    mesh_info = describe_mesh(mesh, resolution=resolution_for_metadata, fe_degree=fe_degree)
 
     return MixedDiffusionResult(
         u_dofs=np.asarray(u_h.vector().get_local(), dtype=np.float64),
@@ -310,9 +349,11 @@ def calibrate_mesh_resolution(
 ) -> list[DiffusionMeshInfo]:
     """Report mesh statistics across a range of mshr resolutions.
 
-    Used offline to pick a resolution whose (h_min, h_max, K) are close to
-    the paper's reported (0.0844, 0.1146, 2622) -- see module docstring.
-    Does not modify any state; purely diagnostic.
+    Superseded by ``load_original_mesh`` for anything paper-scale (that
+    mesh needs no calibration at all). Retained only for the structured-mesh
+    smoke-test fallback in ``build_diffusion_mesh``; target (h_min, h_max,
+    K) = (0.0844, 0.1146, 2622), matching the authors' real mesh with the
+    BDM2xDG1 element pair. Does not modify any state; purely diagnostic.
     """
     _require_fenics()
 

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.overleaf.com)",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate sparsegrid && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && PYTHONPATH=src python -m pytest -q tests/test_sparse_grid.py > /tmp/pytest_sparse_grid.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate sparsegrid && pip install pytest -q; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate sparsegrid && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && PYTHONPATH=src python -m pytest -q tests/test_sparse_grid.py > /tmp/pytest_sparse_grid2.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate fenics2019 && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && PYTHONPATH=src python -m pytest -q tests/test_mass_matrix.py > /tmp/pytest_mass_matrix.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate fenics2019 && conda install -y -c conda-forge scipy; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate fenics2019 && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && PYTHONPATH=src python -m pytest -q tests/test_mass_matrix.py > /tmp/pytest_mass_matrix2.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate fenics2019 && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && PYTHONPATH=src python -m pytest -q tests/ > /tmp/pytest_fenics_full.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate fenics2019 && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && PYTHONPATH=src python -m pytest -q tests/test_diffusion_mixed_fenics_solver.py tests/test_nsb_mixed_fenics_solver.py tests/test_mass_matrix.py > /tmp/pytest_fem_all.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate fenics2019 && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && python scripts/wsl/time_diffusion_solves.py > /tmp/time_diffusion.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'ps aux | grep generate_diffusion_case | grep -v grep; echo \"---log---\"; cat /tmp/gen_diffusion_affine_d4.log 2>/dev/null | tail -20')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate fenics2019 && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && python scripts/wsl/generate_diffusion_case.py --case-name diffusion_affine_d4 --coefficient affine --dimension 4 > /tmp/gen_diffusion_affine_d4.log 2>&1; echo EXIT_CODE=$?')",
+      "PowerShell(wsl -d Ubuntu-22.04 -- bash -lc 'source $HOME/miniforge3/etc/profile.d/conda.sh && conda activate sparsegrid && cd /mnt/c/Users/sandr/Documents/JKU_Master_Artificial_Intelligence/operator-learning-reproduction && python scripts/wsl/generate_sparse_grid_points.py --dimension 4 && python scripts/wsl/generate_sparse_grid_points.py --dimension 8')"
+    ]
+  }
+}

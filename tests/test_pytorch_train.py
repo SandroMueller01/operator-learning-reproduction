@@ -126,11 +126,14 @@ def test_late_loss_spike_triggers_restore_to_best_checkpoint() -> None:
     assert model.param.item() == 3.0
 
 
-def test_ratio_trigger_checkpoints_even_without_a_new_best() -> None:
-    """The paper's rule also checkpoints when loss drops by a ratio < 1/8
-    relative to the *last checkpoint*, independent of the best-loss
-    trigger. Loss goes 8.0 -> 8.0 -> 0.9 (ratio 0.9/8.0=0.1125 < 1/8) then
-    spikes; the ratio-triggered checkpoint at epoch 3 should be restored.
+def test_tied_loss_does_not_move_the_checkpoint() -> None:
+    """The authors' own callback (``PDE_DATA/CODE_P/callbacks.py``) checks
+    ``current_loss < best_loss`` (strict), not ``<=`` -- so there is no
+    separate loss-ratio checkpoint trigger, only this single best-so-far
+    rule (a 1/16 ratio does exist in their code, but only gates how often
+    an expensive test-set error is logged, never which weights get saved).
+    A repeated (tied) loss must not move the checkpoint away from the
+    epoch that first achieved it.
     """
     losses = [8.0, 8.0, 0.9, 5.0, 5.0]
 
@@ -138,6 +141,8 @@ def test_ratio_trigger_checkpoints_even_without_a_new_best() -> None:
 
     assert result["restored_from_checkpoint"] is True
     assert result["final_loss"] == pytest.approx(0.9, rel=1e-6)
+    # Best loss (0.9) occurs at epoch 3; the tie at epoch 2 (loss==8.0,
+    # same as epoch 1) must not have moved the checkpoint to epoch 2.
     assert model.param.item() == 3.0
 
 

@@ -13,21 +13,21 @@ import optax
 
 from ol_reproduction.config.load import load_yaml
 from ol_reproduction.data.dataset_io import load_npz_dataset
-from ol_reproduction.evaluation.relative_error import relative_l2_error
+from ol_reproduction.evaluation.relative_error import (
+    relative_l2_error,
+    relative_l2_error_mass_weighted,
+)
 from ol_reproduction.models.jax_mlp import (
     JaxMlpConfig,
     Params,
     apply_jax_mlp,
     initialize_jax_mlp,
 )
+from ol_reproduction.pde.mass_matrix import load_mass_matrix_npz
 
 
 ConfigDict = dict[str, Any]
 OptState = optax.OptState
-
-# Paper Appendix A.2(iv): save a checkpoint whenever the ratio between the
-# current loss and the last checkpoint's loss drops below this threshold.
-CHECKPOINT_LOSS_RATIO_THRESHOLD = 1.0 / 8.0
 
 
 def train_jax_from_files(
@@ -80,6 +80,9 @@ def train_jax_from_files(
     model_config = load_yaml(model_config_path)
     train_config = load_yaml(train_config_path)
 
+    mass_matrix = _load_mass_matrix_for_target(dataset_path, target)
+    test_weights = test_data.get("w")
+
     return train_jax(
         x_train=train_data["x"],
         y_train=train_data[target_key],
@@ -88,7 +91,24 @@ def train_jax_from_files(
         model_config=model_config,
         train_config=train_config,
         trial_seed=trial_seed,
+        mass_matrix=mass_matrix,
+        test_weights=test_weights,
     )
+
+
+def _load_mass_matrix_for_target(dataset_path: Path, target: str):
+    """Load the FEM mass matrix for ``target``'s function space, if a
+    sidecar mass-matrix file exists next to the dataset. See
+    ``pytorch_train._load_mass_matrix_for_target`` (identical logic, kept
+    duplicated to avoid a training-module cross-import)."""
+    candidates = [
+        dataset_path / f"mass_matrix_{target.strip().lower()}.npz",
+        dataset_path / "mass_matrix.npz",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return load_mass_matrix_npz(candidate)
+    return None
 
 
 def train_jax(
@@ -99,6 +119,8 @@ def train_jax(
     model_config: ConfigDict,
     train_config: ConfigDict,
     trial_seed: int | None = None,
+    mass_matrix=None,
+    test_weights: np.ndarray | None = None,
 ) -> dict[str, float]:
     """Train a JAX MLP and evaluate relative test error.
 
@@ -119,6 +141,14 @@ def train_jax(
     trial_seed:
         Trial index used to seed the PRNG key (overrides
         ``train_config["reproducibility"]["seed"]`` when given).
+    mass_matrix:
+        Optional FEM mass matrix (``scipy.sparse``) for the target's
+        function space -- see ``pytorch_train.train_pytorch`` for the full
+        rationale. When omitted, falls back to a plain unweighted relative
+        L2 error.
+    test_weights:
+        Optional sparse-grid quadrature weights, shape ``(m_test,)``.
+        Ignored if ``mass_matrix`` is ``None``.
 
     Returns
     -------
@@ -192,10 +222,18 @@ def train_jax(
     )
     y_pred_np = np.asarray(y_pred)
 
-    test_error = relative_l2_error(
-        y_true=y_test,
-        y_pred=y_pred_np,
-    )
+    if mass_matrix is not None:
+        test_error = relative_l2_error_mass_weighted(
+            y_true=y_test,
+            y_pred=y_pred_np,
+            mass_matrix=mass_matrix,
+            parametric_weights=test_weights,
+        )
+    else:
+        test_error = relative_l2_error(
+            y_true=y_test,
+            y_pred=y_pred_np,
+        )
 
     return {
         "final_train_loss": float(training_result["final_loss"]),
@@ -441,14 +479,14 @@ def _run_training_loop(
 ) -> tuple[Params, OptState, dict[str, float | int | bool]]:
     """Run full-batch JAX training.
 
-    Implements the paper's checkpoint/restore rule (Appendix A.2(iv)),
-    mirroring ``pytorch_train._run_training_loop``: snapshot ``params``
-    whenever either the ratio to the last checkpoint's loss drops below
-    1/8, or the current loss is the best seen so far; restore the
-    checkpoint at the end if the final loss is worse than it. JAX pytrees
-    are immutable, so "snapshotting" is just keeping a reference to the
-    current ``params`` -- no deep copy is needed the way PyTorch's
-    ``state_dict()`` requires.
+    Implements the paper's actual checkpoint/restore rule (see
+    ``pytorch_train._run_training_loop`` for the full derivation from the
+    authors' Keras callback): snapshot ``params`` whenever the current loss
+    is the best seen so far (single trigger -- there is no separate
+    loss-ratio checkpoint trigger); restore the checkpoint at the end if
+    the final loss is worse than it. JAX pytrees are immutable, so
+    "snapshotting" is just keeping a reference to the current ``params`` --
+    no deep copy is needed the way PyTorch's ``state_dict()`` requires.
 
     Parameters
     ----------
@@ -483,7 +521,6 @@ def _run_training_loop(
 
     checkpoint_params: Params | None = None
     checkpoint_loss = float("inf")
-    last_checkpoint_loss: float | None = None
 
     for epoch in range(1, epochs + 1):
         params, opt_state, final_loss = train_step(
@@ -498,17 +535,8 @@ def _run_training_loop(
         is_best_so_far = final_loss_value < best_loss
         if is_best_so_far:
             best_loss = final_loss_value
-
-        ratio_trigger = (
-            last_checkpoint_loss is not None
-            and last_checkpoint_loss > 0.0
-            and (final_loss_value / last_checkpoint_loss) < CHECKPOINT_LOSS_RATIO_THRESHOLD
-        )
-
-        if ratio_trigger or is_best_so_far:
             checkpoint_params = params
             checkpoint_loss = final_loss_value
-            last_checkpoint_loss = final_loss_value
 
         if epoch == 1 or epoch % log_every == 0 or epoch == epochs:
             print(f"epoch={epoch:05d} train_loss={final_loss_value:.6e}")

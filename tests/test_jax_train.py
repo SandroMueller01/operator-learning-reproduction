@@ -67,7 +67,10 @@ def test_late_loss_spike_triggers_restore_to_best_checkpoint() -> None:
     assert params == 3  # rolled back to the best-loss epoch
 
 
-def test_ratio_trigger_checkpoints_even_without_a_new_best() -> None:
+def test_tied_loss_does_not_move_the_checkpoint() -> None:
+    """Strict '<' (not '<='), matching the authors' callback -- no separate
+    ratio trigger. See test_pytorch_train.py's version of this test for
+    the full rationale."""
     losses = [8.0, 8.0, 0.9, 5.0, 5.0]
 
     params, result = _run_scripted_training(losses)

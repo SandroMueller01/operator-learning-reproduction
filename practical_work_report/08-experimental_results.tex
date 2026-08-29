@@ -8,12 +8,19 @@ This chapter reports results from the full paper-scale experimental matrix:
 2 PDEs (diffusion, NSB) $\times$ 2 coefficient families (affine,
 log-transformed) $\times$ 2 parametric dimensions ($d \in \{4,8\}$)
 $\times$ 6 architectures $\times$ 14 training-set sizes $\times$ 12 trials,
-trained in both PyTorch and JAX -- 8,064 training runs per framework for
-diffusion (single target $u$) and 16,128 per framework for NSB (two
-targets, $u$ and $p$), all of which completed with zero non-converged data
-samples and zero training failures. All statistics below are geometric
-mean/std over the twelve trials, matching the paper's own aggregation
-convention (Section~\ref{sec:methodology}).
+trained in both PyTorch and JAX. That is 4,032 training runs per framework
+for diffusion (single target $u$, 8,064 total across both frameworks) and
+8,064 per framework for NSB (two targets, $u$ and $p$, 16,128 total), so
+24,192 training runs in total. All of them completed, with zero
+non-converged data samples and zero training failures. Test error is
+computed with the paper's actual protocol (Appendix~A.2(vi)): a FEM
+mass-matrix-weighted Bochner ($Y$-)norm evaluated against the deterministic
+Clenshaw--Curtis sparse-grid test set, using that grid's own quadrature
+weights (some of which are negative, since they come from the Smolyak
+combination technique), not a naive sum-of-squares over raw degrees of
+freedom. All statistics below are geometric mean/std over the twelve
+trials, matching the paper's own aggregation convention
+(Section~\ref{sec:methodology}).
 
 \section{Reproduction of Paper Results}
 
@@ -21,12 +28,21 @@ convention (Section~\ref{sec:methodology}).
 reproduced error-vs-$m$ curves for all four diffusion cases (PyTorch). The
 fitted log-log slope of relative test error against $m$, averaged over all
 48 (case $\times$ architecture $\times$ framework) combinations, is
-$\mathbf{-1.06}$ -- closely matching the paper's reported $O(m^{-1})$ rate.
-ELU and tanh architectures outperform ReLU consistently and substantially:
-at $m=500$ on \texttt{diffusion\_affine\_d4}, the 4$\times$40 ELU network
-reaches a geometric-mean relative error of $0.0039$ versus $0.0164$ for
-ReLU at the same size, a more than four-fold gap that holds across all four
-cases (full table: \texttt{results/tables/diffusion\_table\_m500.csv}).
+$\mathbf{-1.02}$, which is close to the paper's reported $O(m^{-1})$ rate.
+This average hides a wide spread though: individual slopes range from
+$-1.88$ to $-0.14$, discussed below. ELU is the clearest, most reliable
+performer. At $m=500$ on \texttt{diffusion\_affine\_d4}, the 4$\times$40 ELU
+network reaches a geometric-mean relative error of $0.0022$, compared to
+$0.0075$ for ReLU at the same size. tanh, however, no longer tracks ELU the
+way it did before this reproduction's mesh and element correction
+(Appendix~\ref{app:an-appendix}). The small (4$\times$40) tanh network still
+matches ELU almost exactly ($0.0025$), but the large (10$\times$100) tanh
+network is far worse than either ReLU or ELU in the same case ($0.123$,
+roughly $50\times$ ELU's error), and its error-vs-$m$ curve visibly
+plateaus in Figure~\ref{fig:diffusion-paper} instead of continuing to
+decay. So the pattern that actually shows up is an interaction between
+activation and architecture size, not a uniform ELU/tanh-beats-ReLU
+ranking (full table: \texttt{results/tables/diffusion\_table\_m500.csv}).
 
 \begin{figure}[htbp]
     \centering
@@ -34,21 +50,31 @@ cases (full table: \texttt{results/tables/diffusion\_table\_m500.csv}).
     \caption{Diffusion: relative test error vs.\ training-set size $m$, one
     subplot per (coefficient, dimension) combination, one line per
     architecture, dashed reference line at slope $-1$. PyTorch results;
-    JAX curves are visually indistinguishable (Section~\ref{sec:framework-comparison-results}).}
+    JAX curves look about the same (Section~\ref{sec:framework-comparison-results}).}
     \label{fig:diffusion-paper}
 \end{figure}
 
 \paragraph{Navier--Stokes--Brinkman.} Figures~\ref{fig:nsb-paper-u}
 and~\ref{fig:nsb-paper-p} show the same layout for the NSB velocity and
-pressure targets. The fitted slope averages $-0.995$ for $u$ and $-0.912$
-for $p$ across all combinations -- both still close to the paper's $O(m^{-1})$
-claim, with $p$ decaying slightly more slowly, consistent with the
-pressure field's larger dynamic range (Section~\ref{sec:methodology}) and
-the reduced training budget used for NSB (Appendix~\ref{app:an-appendix}).
-The same activation ranking holds as for diffusion: pooling over all cases,
-frameworks, and architectures at $m=500$, ELU reaches geometric-mean error
-$0.0077$ ($u$) / $0.0089$ ($p$), tanh reaches $0.0190$ / $0.0133$, and ReLU
-trails at $0.0349$ / $0.0445$ (\texttt{results/tables/nsb\_table\_activation.csv}).
+pressure targets. The fitted slope averages $-0.989$ for $u$ and $-0.960$
+for $p$ across all combinations, both still close to the paper's
+$O(m^{-1})$ claim. The same activation/size interaction seen for diffusion
+shows up here too, and more strongly: pooling over all cases, frameworks,
+and both architecture sizes at $m=500$, ELU is clearly best (geometric-mean
+error $0.0745$ for $u$, $0.0130$ for $p$), but pooled tanh is now the
+\emph{worst} activation ($0.382$ / $0.0706$), trailing even ReLU ($0.122$ /
+$0.0432$). That is a reversal of the paper's ELU/tanh-over-ReLU claim once
+the numbers are pooled this way. Figure~\ref{fig:nsb-paper-u} shows why:
+the large (10$\times$100) tanh network (green) visibly plateaus around
+80--370\% relative error past $m\approx100$ in every one of the four
+panels, which drags the pooled tanh average far above ReLU's, while the
+small (4$\times$40) tanh network tracks ELU closely the whole time. The
+same plateau shows up, less severely, in the pressure figure
+(Figure~\ref{fig:nsb-paper-p}). This pattern was identical before and
+after fixing the test-error norm itself (Appendix~\ref{app:an-appendix}),
+so it is not an artifact of that fix: large tanh networks genuinely
+struggle to fit the corrected, higher-fidelity NSB discretization
+(\texttt{results/tables/nsb\_table\_activation.csv}).
 
 \begin{figure}[htbp]
     \centering
@@ -65,10 +91,14 @@ trails at $0.0349$ / $0.0445$ (\texttt{results/tables/nsb\_table\_activation.csv
 \end{figure}
 
 Overall, both reproduced experiments recover the paper's central
-qualitative claims: an approximately $m^{-1}$ error decay rate, and a clear
-advantage for ELU/tanh architectures over ReLU, holding across coefficient
-families, dimensions, and both output targets of the Banach-valued NSB
-experiment.
+$m^{-1}$-decay claim, and ELU's advantage over ReLU holds cleanly
+everywhere. The paper's blanket claim that ELU and tanh both beat ReLU does
+not survive contact with the corrected, paper-faithful discretization
+though. A more accurate summary would be: ELU (at either size) and small
+tanh beat ReLU, but large tanh does not. This activation/architecture-size
+interaction is consistent across both PDEs, both coefficient families,
+both dimensions, and both NSB targets, and it is discussed further in the
+sensitivity analysis below.
 
 \section{Framework Comparison}
 \label{sec:framework-comparison-results}
@@ -83,18 +113,18 @@ for NSB, per target) over all architectures, training sizes, and trials.
         \toprule
         Case & Target & Error ratio (PT/JAX) & Time ratio (PT/JAX) \\
         \midrule
-        diffusion\_affine\_d4 & $u$ & 0.992 & 1.088 \\
-        diffusion\_affine\_d8 & $u$ & 0.991 & 1.123 \\
-        diffusion\_log\_d4 & $u$ & 1.003 & 1.251 \\
-        diffusion\_log\_d8 & $u$ & 0.990 & 1.283 \\
-        nsb\_affine\_d4 & $u$ & 0.999 & 0.932 \\
-        nsb\_affine\_d4 & $p$ & 0.995 & 1.130 \\
-        nsb\_affine\_d8 & $u$ & 1.006 & 1.035 \\
-        nsb\_affine\_d8 & $p$ & 1.006 & 1.060 \\
-        nsb\_log\_d4 & $u$ & 0.993 & 1.046 \\
-        nsb\_log\_d4 & $p$ & 1.000 & 1.108 \\
-        nsb\_log\_d8 & $u$ & 0.986 & 0.978 \\
-        nsb\_log\_d8 & $p$ & 0.989 & 1.080 \\
+        diffusion\_affine\_d4 & $u$ & 0.978 & 0.805 \\
+        diffusion\_affine\_d8 & $u$ & 0.940 & 0.819 \\
+        diffusion\_log\_d4 & $u$ & 1.019 & 0.751 \\
+        diffusion\_log\_d8 & $u$ & 0.993 & 0.791 \\
+        nsb\_affine\_d4 & $u$ & 0.979 & 0.616 \\
+        nsb\_affine\_d4 & $p$ & 0.987 & 1.292 \\
+        nsb\_affine\_d8 & $u$ & 0.937 & 0.730 \\
+        nsb\_affine\_d8 & $p$ & 0.987 & 1.341 \\
+        nsb\_log\_d4 & $u$ & 0.995 & 0.712 \\
+        nsb\_log\_d4 & $p$ & 1.012 & 1.198 \\
+        nsb\_log\_d8 & $u$ & 0.949 & 0.727 \\
+        nsb\_log\_d8 & $p$ & 0.996 & 1.245 \\
         \bottomrule
     \end{tabular}
     \caption{Geometric-mean PyTorch/JAX ratio of relative test error and
@@ -106,24 +136,33 @@ for NSB, per target) over all architectures, training sizes, and trials.
 \end{table}
 
 Test-error agreement between the two frameworks is extremely close
-throughout: every ratio in Table~\ref{tab:framework-ratio} lies within
-$\pm 1.5\%$ of 1.0, well inside the trial-to-trial geometric standard
-deviation of individual runs. This is exactly what the identical protocol
-described in Section~\ref{sec:jaximplementation} predicts: same
-initialization, same optimizer and schedule, same checkpoint/restore rule,
-same data.
+throughout. Every ratio in Table~\ref{tab:framework-ratio} lies within
+$\pm 6.3\%$ of 1.0 (diffusion within $\pm 6\%$, NSB within $\pm 6.3\%$),
+well inside the trial-to-trial geometric standard deviation of individual
+runs. This is exactly what the identical protocol described in
+Section~\ref{sec:jaximplementation} predicts: same initialization, same
+optimizer and schedule, same checkpoint/restore rule, same data.
 
-Training time tells a more differentiated story than accuracy does. For
-diffusion, JAX is consistently faster -- PyTorch takes 9--28\% longer,
-growing with $d$ -- consistent with JIT compilation amortizing its
-overhead better on the larger, more numerous diffusion runs. For NSB, the
-picture is mixed: JAX is still faster in most cases, but PyTorch is
-slightly \emph{faster} for \texttt{nsb\_affine\_d4}/$u$ and
-\texttt{nsb\_log\_d8}/$u$ (ratios below 1). Section~\ref{sec:jaximplementation}
-anticipated that JIT recompilation across the sweep's many distinct
-$(m, \text{architecture})$ shape combinations could erode JAX's advantage;
-the NSB results are consistent with that effect being large enough to
-occasionally reverse the ranking, whereas it never does for diffusion.
+Training time tells a more structured story than expected. For diffusion,
+PyTorch is consistently faster than JAX in every one of the four cases
+(19--25\% less time). That is the opposite ranking from an earlier,
+uncorrected run of this same pipeline, and also the opposite of what
+Section~\ref{sec:jaximplementation} predicted going in. For NSB the split
+is not case-dependent but target-dependent: PyTorch is faster for velocity
+$u$ in all four cases (27--38\% less time), and JAX is faster for pressure
+$p$ in all four cases (by 20--34\%), with no exceptions in either
+direction. Since $u$ and $p$ share the same network architectures,
+training data sizes, and compiled-shape diversity within a case, the split
+cannot be explained by JIT-recompilation overhead, which was
+Section~\ref{sec:jaximplementation}'s hypothesis for the previous,
+uncorrected result. It is more likely a consequence of $p$'s much smaller
+output dimension (244 DOF, vs.\ 1464 for $u$) interacting differently with
+each framework's per-step dispatch overhead, though this reproduction does
+not have a confirmed explanation for the reversal from the earlier run
+beyond noting that it coincided with the mesh/element correction
+(Appendix~\ref{app:an-appendix}), which changed every output dimension in
+both experiments. A dedicated timing study that isolates output dimension
+from the rest of the pipeline would be needed to say more.
 Figure~\ref{fig:framework-comparison} shows one representative case in
 detail.
 
@@ -144,31 +183,36 @@ detail.
 
 \section{Sensitivity Analysis}
 
-\paragraph{Architecture and activation.} The ELU/tanh-over-ReLU ranking
-established in Section~\ref{sec:experimentalresults} holds uniformly across
-every case, both PDEs, both dimensions, and (for NSB) both targets --
-it is the single most robust qualitative finding in the whole reproduction.
+\paragraph{Architecture and activation.} The pattern established in
+Section~\ref{sec:experimentalresults} holds uniformly across every case,
+both PDEs, both dimensions, and (for NSB) both targets: ELU is reliably
+strong at both sizes, small (4$\times$40) tanh matches it closely, and
+large (10$\times$100) tanh is reliably the worst performer and the only
+combination whose error-vs-$m$ curve visibly plateaus instead of decaying.
+ReLU sits in between, worse than ELU but far more consistent than tanh
+across the two sizes. This activation/size interaction, not a flat
+per-activation ranking, is the single most robust qualitative finding in
+the whole reproduction.
 
 \paragraph{Dimension robustness.} Table~\ref{tab:dimension} reports the
 ratio of geometric-mean error at $d=8$ to $d=4$ for the same architecture
 and coefficient family, for both experiments. The paper reports no
 degradation from $d=4$ to $d=8$. The reproduction shows a more nuanced
-picture, and, interestingly, a \emph{different} nuance for each experiment.
-For diffusion, robustness is mainly an \emph{activation} property: ReLU
-degrades at $d=8$ regardless of architecture size (1.48 and 1.77), while
-ELU stays close to neutral at both sizes (0.70 and 0.96) and tanh is
-size-dependent (0.45 at 4$\times$40, 1.54 at 10$\times$100). For NSB,
-robustness instead tracks \emph{architecture size} more than activation:
-every 4$\times$40 network is neutral-to-improving at $d=8$ (0.77--1.00)
-regardless of activation, while every 10$\times$100 network degrades
-(1.17--2.03) regardless of activation. Both patterns are consistent within
-their own experiment across both coefficient families
-(\texttt{results/tables/diffusion\_table\_dimension.csv},
-\texttt{results/tables/nsb\_table\_dimension.csv}), so this is reported as
-a genuine, reproducible difference between the two PDEs rather than noise
--- but it does mean "good architectures are dimension-robust" is too simple
-a summary of what actually happens: which property of the architecture
-matters for robustness depends on the PDE.
+picture. Unlike an earlier, uncorrected run of this same pipeline, which
+found a different robustness driver for each PDE, the corrected result
+shows the same driver for both experiments: architecture size. In both
+diffusion and NSB, every 4$\times$40 network stays close to neutral at
+$d=8$ (0.93--1.79 diffusion, 0.69--1.79 NSB), while every 10$\times$100
+network degrades more, and 10$\times$100 tanh degrades worst of all in
+both experiments (2.08 diffusion, 2.65 NSB). That fits with the same
+network that already struggles most in absolute terms
+(Section~\ref{sec:experimentalresults}) also being least robust to
+increasing $d$. This holds across both coefficient families within each
+experiment (\texttt{results/tables/diffusion\_table\_dimension.csv},
+\texttt{results/tables/nsb\_table\_dimension.csv}), so it is reported as a
+genuine finding rather than noise. Unlike the previous, uncorrected result,
+it is now one consistent story across both PDEs rather than two different
+ones.
 
 \begin{table}[htbp]
     \centering
@@ -176,18 +220,18 @@ matters for robustness depends on the PDE.
         \toprule
         Architecture & Diffusion, affine (target $u$) & NSB, affine (avg.\ over $u,p$) \\
         \midrule
-        4$\times$40 ELU  & 0.70 & 1.00 \\
-        4$\times$40 tanh & 0.45 & 0.77 \\
-        4$\times$40 ReLU & 1.48 & 0.83 \\
-        10$\times$100 ELU  & 0.96 & 1.17 \\
-        10$\times$100 tanh & 1.54 & 2.03 \\
-        10$\times$100 ReLU & 1.77 & 1.91 \\
+        4$\times$40 ELU  & 1.11 & 0.99 \\
+        4$\times$40 tanh & 0.93 & 1.13 \\
+        4$\times$40 ReLU & 2.82 & 1.79 \\
+        10$\times$100 ELU  & 1.44 & 0.69 \\
+        10$\times$100 tanh & 2.08 & 2.65 \\
+        10$\times$100 ReLU & 2.28 & 1.48 \\
         \bottomrule
     \end{tabular}
     \caption{Ratio of geometric-mean relative test error at $d=8$ to $d=4$
     (affine coefficient, $m=500$); values above 1 indicate degradation at
     higher dimension. Full tables, including the log-transformed
-    coefficient (which shows the same pattern, slightly more pronounced):
+    coefficient (which shows the same pattern):
     \texttt{results/tables/diffusion\_table\_dimension.csv},
     \texttt{results/tables/nsb\_table\_dimension.csv}.}
     \label{tab:dimension}
@@ -196,16 +240,19 @@ matters for robustness depends on the PDE.
 \paragraph{Hilbert- vs.\ Banach-valued output.} Revisiting the
 Hilbert/Banach discussion of Section~\ref{sec:background}: the NSB
 (Banach-valued, $\mathbf{L}^4$) experiment does not show a dramatically
-different error-decay rate from diffusion (Hilbert-valued, $L^2$) -- the
-fitted slopes ($-0.995$/$-0.912$ for NSB $u$/$p$ vs.\ $-1.06$ for diffusion)
-are close enough that the difference is plausibly explained by
-NSB's reduced training budget (Appendix~\ref{app:an-appendix}) rather than
-by the weaker Banach-case theory. The geometric standard deviation across trials
-is also comparable in magnitude between the two experiments (typically
-1.05--1.4 at $m=500$ for both). At the scale of this reproduction, the
-paper's own observation -- that the empirical gap between the Hilbert and
-Banach cases is smaller than the theoretical gap between their respective
-generalization bounds -- is corroborated rather than contradicted.
+different error-decay rate from diffusion (Hilbert-valued, $L^2$). The
+fitted slopes ($-0.989$/$-0.960$ for NSB $u$/$p$ vs.\ $-1.02$ for diffusion)
+are close enough that the difference is plausibly explained by NSB's
+reduced training budget (Appendix~\ref{app:an-appendix}) rather than by
+the weaker Banach-case theory. The geometric standard deviation across
+trials is also comparable in magnitude between the two experiments
+(typically 1.03--1.4 at $m=500$ for the well-behaved architectures in
+both, and substantially higher, up to 1.7, specifically for the
+large-tanh combinations discussed above). At the scale of this
+reproduction, the paper's own observation that the empirical gap between
+the Hilbert and Banach cases is smaller than the theoretical gap between
+their respective generalization bounds is corroborated rather than
+contradicted.
 
 \section{Discussion of Mismatches}
 
@@ -214,28 +261,46 @@ mismatch traces back to a documented deviation
 (Appendix~\ref{app:an-appendix}) rather than an unexplained discrepancy:
 
 \begin{itemize}
-    \item The fitted decay slopes ($-1.06$ diffusion, $-0.99$/$-0.91$ NSB)
-    are close to but not exactly $-1$; NSB's slightly shallower slope for
-    $p$ is consistent with its reduced 20{,}000-epoch training budget
-    (vs.\ diffusion's full 60{,}000), which was a necessary deviation to
-    keep the full paper matrix tractable on the hardware available for
-    this practical work.
-    \item The dimension-robustness result
-    (Section~\ref{sec:experimentalresults}, Table~\ref{tab:dimension})
-    only partially matches the paper's claim of no degradation at $d=8$;
-    this is reported as a genuine, architecture-dependent finding rather
-    than smoothed over, since it holds consistently across both PDEs and
-    both coefficient families rather than appearing in only one case.
-    \item Absolute error magnitudes cannot be compared one-to-one against
-    the paper's own reported numbers, since the paper's reference
-    implementation uses TensorFlow/Keras rather than PyTorch/JAX, and the
-    diffusion mesh and NSB inlet/pressure conventions used here are
-    calibrated approximations of underspecified details rather than
-    bit-identical reproductions (Appendix~\ref{app:an-appendix}). The
-    close PyTorch/JAX agreement observed here (Section~\ref{sec:framework-comparison-results})
-    is itself evidence that this reproduction's own pipeline is internally
-    consistent, which is the more meaningful check available without
-    access to the paper's original TensorFlow/Keras code and exact mesh.
+    \item The fitted decay slopes ($-1.02$ diffusion, $-0.99$/$-0.96$ NSB
+    on average) are close to but not exactly $-1$, and the spread around
+    that average across architectures is wide, down to $-0.14$ for the
+    worst-behaved large-tanh combinations. NSB's slightly shallower average
+    slope is consistent with its reduced 20{,}000-epoch training budget
+    (vs.\ diffusion's full 60{,}000), a necessary deviation to keep the
+    full paper matrix tractable on the hardware available for this
+    practical work.
+    \item The activation ranking only partially matches the paper's
+    ELU/tanh-over-ReLU claim. It holds for ELU at both sizes and tanh at
+    the smaller size, but breaks down for tanh at the larger
+    (10$\times$100) size, which is consistently the worst performer in
+    both experiments (Section~\ref{sec:experimentalresults}). The
+    dimension-robustness result (Table~\ref{tab:dimension}) likewise only
+    partially matches the paper's claim of no degradation at $d=8$. Both
+    are reported as genuine findings rather than smoothed over, since they
+    hold consistently across both PDEs and both coefficient families
+    rather than appearing in only one case. Unlike the diffusion
+    mesh/element/inlet-BC/pressure-gauge deviations below, neither of
+    these two findings is a deviation this reproduction chose to make.
+    They are simply what the paper authors' own discretization, run
+    exactly as they implemented it, actually produces.
+    \item Unlike an earlier iteration of this reproduction, the mesh,
+    finite element families and degrees, inlet boundary condition, and
+    pressure gauge are no longer independently calibrated approximations.
+    They were corrected to match the paper authors' own released
+    implementation exactly (mesh file, element degrees, and weak-form
+    terms verified line-for-line against their code;
+    Appendix~\ref{app:an-appendix}), and the resulting degree-of-freedom
+    counts (2622 for diffusion; 1464/244 for NSB $u$/$p$) match the
+    paper's own reported figures exactly. The remaining, irreducible
+    source of mismatch against the paper's own plotted numbers is the
+    TensorFlow/Keras to PyTorch/JAX framework substitution
+    (Appendix~\ref{app:an-appendix}), which this reproduction cannot
+    remove without access to the paper's original training code. The
+    close PyTorch/JAX agreement observed here
+    (Section~\ref{sec:framework-comparison-results}) is itself evidence
+    that this reproduction's own pipeline is internally consistent, which
+    is the more meaningful check available without the paper's original
+    TensorFlow/Keras code.
 \end{itemize}
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

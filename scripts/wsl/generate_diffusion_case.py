@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from ol_reproduction.data.dataset_io import save_npz_dataset  # noqa: E402
 from ol_reproduction.data.sampling import sample_uniform_parameters  # noqa: E402
 from ol_reproduction.pde.diffusion.fenics_mixed_solver import (  # noqa: E402
-    build_diffusion_mesh,
+    load_original_mesh,
     solve_diffusion_mixed_fenics,
 )
 from ol_reproduction.pde.mass_matrix import (  # noqa: E402
@@ -37,7 +37,7 @@ from ol_reproduction.pde.mass_matrix import (  # noqa: E402
 
 TRAIN_SIZES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500]
 SEEDS = list(range(12))
-MESH_RESOLUTION = 23  # calibrated in Phase 3 toward the paper's K=2622
+FE_DEGREE = 1  # matches the authors' --FE_degree default
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,15 +61,15 @@ def main() -> None:
     output_dir = Path(args.output_dir) if args.output_dir else repo_root / "data/processed" / args.case_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Building mesh (resolution={MESH_RESOLUTION})...")
-    mesh = build_diffusion_mesh(MESH_RESOLUTION)
+    print("Loading the authors' original mesh (data/original_mesh/poisson.xml)...")
+    mesh = load_original_mesh()
 
-    # Build one solve to get a handle on the DG0 u function space for the
+    # Build one solve to get a handle on the DG1 u function space for the
     # mass matrix (solve_diffusion_mixed_fenics doesn't expose the space
     # object directly, so rebuild it identically here -- cheap, cached JIT).
     import dolfin as df
 
-    u_element = df.FiniteElement("DG", mesh.ufl_cell(), 0)
+    u_element = df.FiniteElement("DG", mesh.ufl_cell(), FE_DEGREE)
     u_space = df.FunctionSpace(mesh, u_element)
     print("Assembling mass matrix...")
     mass_matrix = assemble_mass_matrix_csr(u_space)
@@ -163,8 +163,9 @@ def main() -> None:
         "coefficient": args.coefficient,
         "dimension": args.dimension,
         "mesh": {
-            "method": "structured_UnitSquareMesh_mshr_unavailable",
-            "resolution": MESH_RESOLUTION,
+            "method": "original_authors_mesh",
+            "source": "data/original_mesh/poisson.xml",
+            "fe_degree": FE_DEGREE,
             "num_cells": mesh.num_cells(),
             "h_min": mesh.hmin(),
             "h_max": mesh.hmax(),
@@ -185,10 +186,9 @@ def main() -> None:
         },
         "note": (
             "Generated with the mixed FEM diffusion solver "
-            "(pde/diffusion/fenics_mixed_solver.py), paper eq. B.9-B.12. "
-            "Mesh is a structured UnitSquareMesh, not mshr-generated "
-            "(mshr unavailable in this environment, see "
-            "scripts/wsl/setup_fenics_env.sh) -- see Phase 3 docstring."
+            "(pde/diffusion/fenics_mixed_solver.py), paper eq. B.9-B.12, "
+            "BDM2 x DG1 elements on the paper authors' own mesh "
+            "(data/original_mesh/poisson.xml)."
         ),
     }
     with open(output_dir / "metadata.json", "w", encoding="utf-8") as handle:

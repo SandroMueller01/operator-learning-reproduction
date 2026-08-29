@@ -116,6 +116,37 @@ def test_mass_weighted_error_applies_parametric_weights() -> None:
     assert error_uniform == pytest.approx(error_weighted, rel=1e-10)
 
 
+def test_mass_weighted_error_handles_negative_sparse_grid_weights() -> None:
+    """Smolyak sparse-grid combination weights are genuinely negative at a
+    real fraction of points (not a corner case): this reproduction's own
+    d=8 quadrature file has 720/3937 negative weights. A naive
+    ``sqrt(sum(w*quad_form) / sum(w*quad_form))`` can go negative under
+    the square root once the weighted sum flips sign, producing NaN
+    instead of a finite error. The authors' own code guards against this
+    by taking abs() of each accumulated weighted sum before the sqrt;
+    this test constructs weights/values that would trip a NaN under the
+    naive (non-abs) formula and checks the guarded formula returns a
+    finite, correctly-computed value instead."""
+    mass_matrix = sp.identity(1, format="csr")
+
+    # quad_form per sample: sample 0 -> 100, sample 1 -> 1 (y_true^2 with a
+    # scalar identity mass matrix). With weights [-10, 1], the unguarded
+    # weighted sum is -10*100 + 1*1 = -999 (negative) for both numerator
+    # and denominator here (y_pred is zero, so diff == y_true).
+    y_true = np.array([[10.0], [1.0]])
+    y_pred = np.array([[0.0], [0.0]])
+    weights = np.array([-10.0, 1.0])
+
+    error = relative_l2_error_mass_weighted(
+        y_true=y_true, y_pred=y_pred, mass_matrix=mass_matrix, parametric_weights=weights
+    )
+
+    assert np.isfinite(error)
+    # numerator == denominator here (diff == y_true, y_pred == 0), so with
+    # both sides abs()'d identically the ratio must be exactly 1.
+    assert error == pytest.approx(1.0, rel=1e-10)
+
+
 def test_mass_weighted_error_rejects_dimension_mismatch() -> None:
     mass_matrix = sp.identity(5, format="csr")
     y_true = np.zeros((2, 3))

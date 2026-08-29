@@ -17,21 +17,22 @@ import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 import dolfin as df
 
-from ol_reproduction.pde.diffusion.fenics_mixed_solver import build_diffusion_mesh
+from ol_reproduction.pde.diffusion.fenics_mixed_solver import load_original_mesh
 from ol_reproduction.pde.navier_stokes_brinkman.fenics_solver import (
+    build_nsb_function_space,
     solve_nsb_mixed_fenics,
 )
 
-RESOLUTION = 23
+FE_DEGREE = 1
 PARAMETERS = np.array([1.0, 0.0, 0.0, 0.0])
 
-mesh = build_diffusion_mesh(RESOLUTION)
+mesh = load_original_mesh()
 result = solve_nsb_mixed_fenics(
     mesh=mesh,
     coefficient_name="affine",
     parameters=PARAMETERS,
     base_value=2.62,
-    resolution_for_metadata=RESOLUTION,
+    fe_degree=FE_DEGREE,
 )
 
 print("converged:", result.converged, "newton_iterations:", result.newton_iterations)
@@ -39,32 +40,19 @@ print("mesh_info:", result.mesh_info)
 print("u_dofs shape:", result.u_dofs.shape)
 print("p_dofs shape:", result.p_dofs.shape)
 
-# u_dofs is a flat DG0 vector array (interleaved per-cell [ux,uy] depending
-# on FEniCS's dof ordering) -- reconstruct via the vector Function to plot
-# correctly rather than assuming an interleaving convention.
-function_space, _ = None, None
-cell = mesh.ufl_cell()
-
+# Reconstruct Functions on the exact same spaces build_nsb_function_space
+# used (u is field index 0, per the authors' [Hu,Ht,Hsig,Hsig,Hgam] order)
+# so the raw dof arrays plot correctly rather than assuming an ordering.
 coords = mesh.coordinates()
 cells = mesh.cells()
 centroids = coords[cells].mean(axis=1)
 
-# Re-run split just for plotting convenience via dof_to_vertex-free approach:
-# evaluate u_h, p_h at cell centroids using the raw arrays is nontrivial for
-# DG0 vector interleaving, so instead reconstruct Functions directly.
-sigma_element = df.VectorElement("BDM", cell, 1, dim=2)
-u_element = df.VectorElement("DG", cell, 0)
-gamma_element = df.FiniteElement("DG", cell, 0)
-t11_element = df.FiniteElement("DG", cell, 1)
-mixed_element = df.MixedElement(
-    [sigma_element, u_element, gamma_element, t11_element, t11_element, t11_element]
-)
-W = df.FunctionSpace(mesh, mixed_element)
-u_space = W.sub(1).collapse()
+W, _ = build_nsb_function_space(mesh, fe_degree=FE_DEGREE)
+u_space = W.sub(0).collapse()
 u_func = df.Function(u_space)
 u_func.vector()[:] = result.u_dofs
 
-p_space = df.FunctionSpace(mesh, "DG", 1)
+p_space = df.FunctionSpace(mesh, "DG", 0)
 p_func = df.Function(p_space)
 p_func.vector()[:] = result.p_dofs
 

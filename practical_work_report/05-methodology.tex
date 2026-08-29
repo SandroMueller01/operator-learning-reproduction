@@ -18,8 +18,15 @@ appendix~B formula
     + \sum_{j=2}^{d} \zeta_j\,\theta_j(z)\,x_j\Big),
 \]
 with $\zeta_j = (\sqrt{\pi\beta})^{1/2}\exp\!\big(-(\lfloor j/2\rfloor\pi\beta)^2/8\big)$,
-$\theta_j$ an alternating sine/cosine basis in the spatial coordinate $z_1$,
-and $\beta_c = 1/8$, $\beta_p = \max(1, 2\beta_c)$, $\beta = \beta_c/\beta_p$.
+$\beta_c = 1/8$, $\beta_p = \max(1, 2\beta_c)$, $\beta = \beta_c/\beta_p$, and
+\[
+    \theta_j(z) =
+    \begin{cases}
+        \sin\!\left(\left\lfloor \tfrac{j}{2} \right\rfloor \dfrac{\pi z_1}{\beta_p}\right), & j \text{ even}, \\[6pt]
+        \cos\!\left(\left\lfloor \tfrac{j}{2} \right\rfloor \dfrac{\pi z_1}{\beta_p}\right), & j \text{ odd},
+    \end{cases}
+    \qquad j = 2, \dots, d.
+\]
 Each of the two PDEs is therefore instantiated in four cases (affine/log
 $\times$ $d\in\{4,8\}$), giving eight cases in total across the two
 experiments.
@@ -42,10 +49,10 @@ with forcing $f = 10$ and Dirichlet data $u = 0.5$ on the bottom edge of
 $\Omega$ and $u = 0$ on the remaining boundary. In this mixed formulation
 the Dirichlet data enters \emph{naturally}, through the boundary functional
 $G(\tau) = \int_{\partial\Omega} g\,(\tau\cdot n)\,\mathrm{d}s$, rather than
-as an essential boundary condition on a primal $H^1(\Omega)$ space -- a
-structural difference from a standard finite-difference or primal-FEM
-discretization that must be respected for the reproduction to match the
-paper's actual formulation.
+as an essential boundary condition on a primal $H^1(\Omega)$ space. This is
+a structural difference from a standard finite-difference or primal-FEM
+discretization, and it has to be respected for the reproduction to match
+the paper's actual formulation.
 
 \paragraph{Navier--Stokes--Brinkman.} The NSB system is posed in the
 four-field mixed form of Gatica, N\'{u}\~{n}ez and Ruiz-Baier
@@ -68,22 +75,32 @@ Section~\ref{sec:background}, unlike the Hilbert-valued diffusion problem.
 \paragraph{Finite element discretization.} Both PDEs are discretized with
 FEniCS~2019.1.0 (legacy \texttt{dolfin}), run inside a WSL2 Ubuntu
 environment since the required legacy FEniCS build is not available on
-native Windows. The diffusion problem uses lowest-order
-Raviart--Thomas/discontinuous-Galerkin elements, $RT_1 \times DG_0$
-\cite{raviartthomas1977}, the standard mixed-Poisson element pair; the mesh
-resolution was calibrated so that the resulting degree-of-freedom count and
-mesh spacing match the values reported in the paper as closely as
-achievable with a structured mesh (\texttt{mshr}, the unstructured mesh
-generator the paper's figures suggest was used, is not usable in this
-environment due to a \texttt{pybind11} ABI incompatibility with the
-installed FEniCS build; this is a documented deviation, see
-Appendix~\ref{app:an-appendix}). The NSB problem uses the
-Arnold--Falk--Winther-type element family
-\cite{arnoldfalkwinther2007} from \cite{gatica2022nsb}: $BDM_1$ for the
-pseudostress $\sigma$, and $DG_0$ for velocity $u$ and skew vorticity
-$\gamma$, together with $DG_1$ for the trace-free strain $t$. The nonlinear
-system is solved with Newton's method via
-\texttt{NonlinearVariationalSolver}.
+native Windows. The paper's appendix gives the continuous weak-form
+equations for both problems, but that alone does not fix a computational
+realization: it does not say which mesh to use, what polynomial degree
+each finite element field should have, or (for one ambiguous printed
+formula, the NSB inlet velocity) what literal numeric value to use. For
+this reason, this reproduction uses the mesh and finite element spaces
+exactly as implemented in the paper authors' own released code, instead of
+building an independent mesh and guessing at a calibrated element pair.
+Both problems are solved on the authors' own mesh, which has 143 vertices
+and 244 triangular cells and was obtained directly from the supervisor and
+loaded without modification. The diffusion problem uses the same element
+pair as their code, $BDM_2 \times DG_1$ \cite{brezzidouglasmarini1985}
+(Brezzi--Douglas--Marini degree 2 for the pseudostress $\sigma$, degree-1
+discontinuous Galerkin for $u$), which gives 2622 total degrees of freedom
+(1890 for $\sigma$, 732 for $u$) and matches the paper's own reported
+figure exactly. The NSB problem uses the Arnold--Falk--Winther-type
+element family \cite{arnoldfalkwinther2007} from \cite{gatica2022nsb} at
+the same polynomial degree as the authors' code: $BDM_2$ per pseudostress
+row, $DG_1$-vector for velocity $u$, $DG_1$ for skew vorticity $\gamma$,
+and $DG_2$-vector (3 components) for the trace-free strain $t$. This gives
+1464 degrees of freedom for $u$ and 244 for the pressure $p$ (projected
+into $DG_0$), again matching the paper's own reported figures exactly. The
+inlet velocity is the authors' constant $(0.1, 0.0)$ profile, and the
+pressure gauge is fixed exactly as in their code, a $DG_0$ projection with
+no additional mean shift. The nonlinear system is solved with Newton's
+method via \texttt{NonlinearVariationalSolver}.
 
 \paragraph{Sparse-grid test protocol.} Rather than drawing an independent
 random test sample, the test error is evaluated on a fixed, deterministic
@@ -91,26 +108,37 @@ Clenshaw--Curtis sparse grid \cite{clenshawcurtis1960} over $[-1,1]^d$,
 built with the Tasmanian toolkit. Sparse grids construct a
 quadrature/interpolation point set for a $d$-dimensional hypercube from
 one-dimensional rules via Smolyak's combination technique
-\cite{smolyak1963}, which grows far more slowly with
-$d$ than a full tensor-product grid -- the property that makes a
-deterministic, exhaustive test discretization feasible at $d=8$ at all. The
-same sparse-grid test set is shared across all training-set sizes $m$ and
-all twelve random trials within a case, exactly matching the paper's
-protocol of reusing one deterministic test discretization per case. The
-sparse-grid level is not stated numerically in the paper and was therefore
-chosen empirically (documented per case in the generated dataset metadata)
-to balance test-set resolution against the combinatorial growth of
-sparse-grid points at $d = 8$.
+\cite{smolyak1963}, which grows far more slowly with $d$ than a full
+tensor-product grid. That is the property that makes a deterministic,
+exhaustive test discretization feasible at $d=8$ at all. The same
+sparse-grid test set is shared across all training-set sizes $m$ and all
+twelve random trials within a case, exactly matching the paper's protocol
+of reusing one deterministic test discretization per case. The sparse-grid
+level is not stated numerically in the paper's own text, but the authors'
+own batch scripts (\texttt{Pbatch.sh}, \texttt{Nbatch\_u.sh}) fix it
+explicitly, and this reproduction now matches their choice exactly: level
+5 (1105 points) at $d=4$, level 4 (3937 points) at $d=8$, for both
+experiments.
 
 \paragraph{Bochner-norm test error.} The relative test error is measured in
 the FEM-mass-matrix-weighted norm $\lVert \cdot \rVert_Y$ induced by the
 function space's mass matrix $M$ ($\lVert v \rVert_Y^2 = v^\top M v$),
-rather than a naive Euclidean sum-of-squares over raw degree-of-freedom
-vectors. This distinction matters in practice because both meshes are
-non-uniform, so an unweighted sum-of-squares would over-weight
-degrees of freedom on smaller elements. The mass matrix is assembled once
-per case during data generation and stored as a sidecar file so that the
-Windows-side training code never needs a FEniCS installation.
+combined with the sparse-grid quadrature weights $w_i$, rather than a
+naive Euclidean sum-of-squares over raw degree-of-freedom vectors averaged
+uniformly over the test points. This matters in practice for two reasons.
+Both meshes are non-uniform, so an unweighted sum-of-squares would
+over-weight degrees of freedom on smaller elements. And the Smolyak
+combination technique used to build the sparse grid produces genuinely
+negative quadrature weights at a real fraction of the test points (720 out
+of 3937 at $d=8$, 336 out of 1105 at $d=4$, in this reproduction's own
+grids), so a poorly-fit model can push the accumulated weighted sum
+negative. The paper authors' own code guards against this by taking the
+absolute value of the accumulated sum on each side of the ratio before
+the square root, and this reproduction does the same; without that guard,
+the square root of a negative number silently produces NaN instead of a
+large but finite error. The mass matrix is assembled once per case during
+data generation and stored as a sidecar file so that the Windows-side
+training code never needs a FEniCS installation.
 
 \paragraph{Dataset scale.} Each of the eight cases (2 PDEs $\times$ 2
 coefficient families $\times$ 2 dimensions) provides training data for
@@ -129,9 +157,8 @@ depth/width configurations (4 hidden layers of width 40, and 10 hidden
 layers of width 100) combined with three activation functions (ReLU, ELU,
 and tanh). Weights are initialized with He/Kaiming-uniform initialization
 \cite{he2015delving} using a ReLU-derived bound for all three activations,
-matching Keras' \texttt{HeUniform} initializer, which is activation-agnostic
--- a detail
-that required an explicit fix in both the PyTorch and JAX implementations,
+matching Keras' \texttt{HeUniform} initializer, which is activation-agnostic.
+This required an explicit fix in both the PyTorch and JAX implementations,
 whose default Kaiming/Xavier conventions are activation-aware and would
 otherwise silently diverge from the paper's stated initialization
 (Sections~\ref{sec:pytorchreimplementation} and~\ref{sec:jaximplementation}).
@@ -145,21 +172,27 @@ For the diffusion experiment, training runs for up to 60{,}000 epochs, with
 an early stop once the training loss falls below a tolerance of
 $5 \times 10^{-7}$, exactly as stated in the paper's appendix. For the NSB
 experiment, this budget is reduced to 20{,}000 epochs and a
-$5 \times 10^{-6}$ tolerance -- a documented deviation
+$5 \times 10^{-6}$ tolerance, a documented deviation
 (Appendix~\ref{app:an-appendix}) made after direct measurement showed NSB
 runs routinely needing tens of thousands of epochs under the same decaying
 schedule to approach the paper's tolerance, which made the full paper-scale
-matrix intractable on the hardware available for this practical work. A
-checkpoint/restore rule from the paper's appendix is implemented exactly
-for both experiments: model weights are checkpointed whenever either (a)
-the ratio between the current loss and the loss at the last checkpoint
-falls below $1/8$, or (b) the current weights achieve the best loss
-observed so far; after training terminates, the checkpointed weights are
-restored if the final-epoch loss is worse than the checkpoint's loss. This
-is a genuine two-trigger rule, not a simple best-loss tracker, and was
-implemented identically for PyTorch and JAX so that any residual difference
-between the two frameworks' results reflects their numerical/optimizer
-behavior rather than a difference in stopping policy.
+matrix intractable on the hardware available for this practical work.
+
+The paper's Appendix~A.2(iv) describes a checkpoint/restore rule in prose
+that reads, on a first pass, like it has two triggers: save whenever
+either the current loss is the best seen so far, or the ratio between the
+current loss and the loss at the last checkpoint drops below $1/8$.
+Cross-checking the authors' own training callback shows this is not
+actually the case. The ratio only controls how often an expensive
+test-error metric gets logged during training, and has no effect on which
+weights are saved. The rule that actually governs checkpointing and
+restoration is a single trigger: save whenever the current loss is the
+best seen so far, and after training terminates, restore the checkpointed
+weights if the final-epoch loss is worse than the checkpoint's loss. This
+reproduction implements exactly that single-trigger rule, identically for
+PyTorch and JAX, so that any residual difference between the two
+frameworks' results reflects their numerical/optimizer behavior rather
+than a difference in stopping policy.
 
 \section{Reproducibility Controls}
 
